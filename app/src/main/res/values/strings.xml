@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">PureLauncher</string>
+    <string name="cd_policy_manager">Policy manager</string>
+    <string name="cd_parent_dashboard">Parent dashboard</string>
+</resources>

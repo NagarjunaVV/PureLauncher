@@ -1,0 +1,35 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.PureLauncher" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Dark background prevents white flash when launcher resumes -->
+        <item name="android:windowBackground">@android:color/black</item>
+        <!-- Kill entrance/exit window animations for instant feel -->
+        <item name="android:windowAnimationStyle">@style/NoWindowAnimation</item>
+    </style>
+
+    <style name="Theme.PureLauncher" parent="Base.Theme.PureLauncher" />
+
+    <!-- Zero-duration animations: launcher feels instantaneous on resume -->
+    <style name="NoWindowAnimation">
+        <item name="android:activityOpenEnterAnimation">@null</item>
+        <item name="android:activityOpenExitAnimation">@null</item>
+        <item name="android:activityCloseEnterAnimation">@null</item>
+        <item name="android:activityCloseExitAnimation">@null</item>
+        <item name="android:taskOpenEnterAnimation">@null</item>
+        <item name="android:taskOpenExitAnimation">@null</item>
+        <item name="android:taskCloseEnterAnimation">@null</item>
+        <item name="android:taskCloseExitAnimation">@null</item>
+        <item name="android:taskToFrontEnterAnimation">@null</item>
+        <item name="android:taskToFrontExitAnimation">@null</item>
+    </style>
+
+    <!-- Dark AlertDialog for widget picker and remove confirmation -->
+    <style name="DarkDialog" parent="Theme.MaterialComponents.Dialog.Alert">
+        <item name="android:background">#111111</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="colorPrimary">#FFFFFF</item>
+        <item name="colorAccent">#FFFFFF</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+</resources>

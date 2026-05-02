@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- POST_NOTIFICATIONS was added in API 33; ignored on older versions -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:hardwareAccelerated="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PureLauncher">
+        <service
+            android:name=".NotificationTelemetryService"
+            android:exported="false"
+            android:label="Notification telemetry"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+        <activity
+            android:name=".GlobalSettingsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".UsageRestrictActivity"
+            android:exported="false" />
+        <activity
+            android:name=".PolicyManagerActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ItemAppRowActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ItemCategoryLimitActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ItemPolicyAppActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ItemSettingsToggleActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AppVaultActivity"
+            android:exported="false" />
+        <activity
+            android:name=".DialogFrictionGateActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ChildQrActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AppSearchActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ParentLinkChildActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ParentFeatureTourActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ActivityParentDashboardActivity"
+            android:exported="false" />
+        <activity
+            android:name=".LauncherActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:clearTaskOnLaunch="true"
+            android:stateNotNeeded="true"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:resumeWhilePausing="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".SignupActivity"
+            android:exported="false" />
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AuthenticationActivity"
+            android:exported="false" />
+        <activity
+            android:name=".PersonalPermissionsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".PersonalFeatureTourActivity"
+            android:exported="false" />
+        <activity
+            android:name=".OnboardingActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MainActivity"
+            android:excludeFromRecents="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".ScreenTimeActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SetupActivity"
+            android:exported="false" />
+    </application>
+
+</manifest>

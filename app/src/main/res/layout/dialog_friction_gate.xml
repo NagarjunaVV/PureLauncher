@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary">
+
+    <!-- Close / X button -->
+    <ImageView
+        android:id="@+id/ivClose"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:src="@drawable/ic_close"
+        android:contentDescription="Close"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginTop="20dp"
+        android:layout_marginStart="20dp" />
+
+    <!-- Screen title -->
+    <TextView
+        android:id="@+id/tvDialogTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Intentional Access"
+        android:textColor="@color/text_secondary"
+        android:textSize="15sp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="22dp" />
+
+    <!-- Blurred app icon area (top half background) -->
+    <View
+        android:id="@+id/blurBg"
+        android:layout_width="0dp"
+        android:layout_height="200dp"
+        android:background="@drawable/bg_blur_dark"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- App icon -->
+    <ImageView
+        android:id="@+id/ivAppIcon"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:background="@drawable/bg_icon_black"
+        android:src="@drawable/ic_placeholder_app"
+        android:padding="16dp"
+        android:contentDescription="App icon"
+        app:layout_constraintTop_toBottomOf="@id/tvDialogTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="24dp" />
+
+    <!-- Dark panel starts here (bottom half) -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/panelBottom"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/bg_primary"
+        app:layout_constraintTop_toBottomOf="@id/ivAppIcon"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- App name -->
+        <TextView
+            android:id="@+id/tvAppName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Instagram"
+            android:textColor="@color/text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="24dp" />
+
+        <!-- Limit badge -->
+        <TextView
+            android:id="@+id/tvLimit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Limit: 1h 30m"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:background="@drawable/bg_chip_dark"
+            android:drawablePadding="4dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp"
+            app:layout_constraintTop_toBottomOf="@id/tvAppName"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="8dp" />
+
+        <!-- Circular progress + counter (custom view) -->
+        <com.purelauncher.ui.views.CircularCounterView
+            android:id="@+id/circularCounter"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            app:layout_constraintTop_toBottomOf="@id/tvLimit"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="28dp" />
+
+        <!-- Number (overlaid on circle — handled in custom view) -->
+        <TextView
+            android:id="@+id/tvClickCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="12"
+            android:textColor="@color/text_primary"
+            android:textSize="52sp"
+            android:textStyle="bold"
+            app:layout_constraintTop_toTopOf="@id/circularCounter"
+            app:layout_constraintBottom_toBottomOf="@id/circularCounter"
+            app:layout_constraintStart_toStartOf="@id/circularCounter"
+            app:layout_constraintEnd_toEndOf="@id/circularCounter"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tvClicksLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="CLICKS LEFT"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:letterSpacing="0.15"
+            app:layout_constraintTop_toBottomOf="@id/tvClickCount"
+            app:layout_constraintStart_toStartOf="@id/circularCounter"
+            app:layout_constraintEnd_toEndOf="@id/circularCounter" />
+
+        <!-- Tap to Unlock button -->
+        <Button
+            android:id="@+id/btnUnlock"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:text="TAP TO UNLOCK"
+            android:textColor="@color/text_on_white"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1"
+            android:backgroundTint="@color/bg_button"
+            android:stateListAnimator="@null"
+            app:layout_constraintTop_toBottomOf="@id/circularCounter"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
+            android:layout_marginTop="32dp" />
+
+        <!-- Changed my mind link -->
+        <TextView
+            android:id="@+id/tvChangedMind"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Changed my mind →"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:clickable="true"
+            android:focusable="true"
+            app:layout_constraintTop_toBottomOf="@id/btnUnlock"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginTop="16dp" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

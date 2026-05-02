@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary">
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Parental Control"
+        android:textColor="@color/text_primary"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="72dp" />
+
+    <!-- Subtitle -->
+    <TextView
+        android:id="@+id/tvSubtitle"
+        android:layout_width="220dp"
+        android:layout_height="wrap_content"
+        android:text="Enter your 4-digit PIN to access the dashboard"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="10dp" />
+
+    <!-- PIN dots row -->
+    <LinearLayout
+        android:id="@+id/llPinDots"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/tvSubtitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="36dp">
+
+        <View
+            android:id="@+id/dot1"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:background="@drawable/pin_dot_empty"
+            android:layout_marginEnd="14dp" />
+
+        <View
+            android:id="@+id/dot2"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:background="@drawable/pin_dot_empty"
+            android:layout_marginEnd="14dp" />
+
+        <View
+            android:id="@+id/dot3"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:background="@drawable/pin_dot_empty"
+            android:layout_marginEnd="14dp" />
+
+        <View
+            android:id="@+id/dot4"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:background="@drawable/pin_dot_empty" />
+
+    </LinearLayout>
+
+    <!-- Error message -->
+    <TextView
+        android:id="@+id/tvError"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Incorrect attempts will trigger a Timetable L..."
+        android:textColor="#FF6B6B"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/llPinDots"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="12dp" />
+
+    <!-- Number pad grid -->
+    <GridLayout
+        android:id="@+id/gridNumpad"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:columnCount="3"
+        android:rowCount="4"
+        android:useDefaultMargins="false"
+        app:layout_constraintTop_toBottomOf="@id/tvError"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="32dp">
+
+        <!-- Row 1: 1 2 3 -->
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key1"
+            android:layout_column="0" android:layout_row="0" />
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key2"
+            android:layout_column="1" android:layout_row="0" />
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key3"
+            android:layout_column="2" android:layout_row="0" />
+
+        <!-- Row 2: 4 5 6 -->
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key4"
+            android:layout_column="0" android:layout_row="1" />
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key5"
+            android:layout_column="1" android:layout_row="1" />
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key6"
+            android:layout_column="2" android:layout_row="1" />
+
+        <!-- Row 3: 7 8 9 -->
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key7"
+            android:layout_column="0" android:layout_row="2" />
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key8"
+            android:layout_column="1" android:layout_row="2" />
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key9"
+            android:layout_column="2" android:layout_row="2" />
+
+        <!-- Row 4: * 0 backspace -->
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/keyStar"
+            android:layout_column="0" android:layout_row="3" />
+        <include layout="@layout/item_numpad_key"
+            android:id="@+id/key0"
+            android:layout_column="1" android:layout_row="3" />
+
+        <ImageView
+            android:id="@+id/keyBack"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_row="3"
+            android:layout_column="2"
+            android:src="@drawable/ic_backspace"
+            android:contentDescription="Backspace"
+            android:gravity="center"
+            android:padding="20dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless" />
+
+    </GridLayout>
+
+    <!-- Biometric hint -->
+    <TextView
+        android:id="@+id/tvBiometric"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Use biometric instead"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        app:layout_constraintTop_toBottomOf="@id/gridNumpad"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
