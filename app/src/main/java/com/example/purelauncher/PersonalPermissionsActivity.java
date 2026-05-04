@@ -1,16 +1,10 @@
 package com.example.purelauncher;
 
-import android.Manifest;
-import android.app.AppOpsManager;
-import android.app.role.RoleManager;
+import android.app.AlertDialog;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Process;
 import android.provider.Settings;
-import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -19,8 +13,6 @@ import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -30,10 +22,7 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
     private enum PermissionStep {
         OVERLAY,
         DEFAULT_HOME,
-        USAGE_ACCESS,
-        NOTIFICATION_ACCESS,
-        /** Shown only on API 33+ where POST_NOTIFICATIONS must be granted at runtime. */
-        POST_NOTIFICATIONS
+        USAGE_ACCESS
     }
 
     private PermissionStep[] steps;
@@ -43,14 +32,13 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
     private TextView title;
     private TextView body;
     private TextView status;
+    private TextView note;
     private Button grantButton;
     private Button backButton;
     private Button nextButton;
 
     private ActivityResultLauncher<Intent> settingsLauncher;
     private ActivityResultLauncher<Intent> roleRequestLauncher;
-    /** Handles the POST_NOTIFICATIONS runtime dialog on API 33+. */
-    private ActivityResultLauncher<String> notificationPermLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,12 +46,11 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_personal_permissions);
 
-        View main = findViewById(R.id.main);
+        android.view.View main = findViewById(R.id.main);
         final int basePaddingLeft = main.getPaddingLeft();
         final int basePaddingTop = main.getPaddingTop();
         final int basePaddingRight = main.getPaddingRight();
         final int basePaddingBottom = main.getPaddingBottom();
-
         ViewCompat.setOnApplyWindowInsetsListener(main, (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(
@@ -75,28 +62,17 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
             return insets;
         });
 
-        // POST_NOTIFICATIONS only exists on API 33+; skip the step on earlier versions.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            steps = new PermissionStep[]{
-                    PermissionStep.DEFAULT_HOME,
-                    PermissionStep.OVERLAY,
-                    PermissionStep.USAGE_ACCESS,
-                    PermissionStep.NOTIFICATION_ACCESS,
-                    PermissionStep.POST_NOTIFICATIONS
-            };
-        } else {
-            steps = new PermissionStep[]{
-                    PermissionStep.DEFAULT_HOME,
-                    PermissionStep.OVERLAY,
-                    PermissionStep.USAGE_ACCESS,
-                    PermissionStep.NOTIFICATION_ACCESS
-            };
-        }
+        steps = new PermissionStep[]{
+                PermissionStep.DEFAULT_HOME,
+                PermissionStep.OVERLAY,
+                PermissionStep.USAGE_ACCESS
+        };
 
         stepCount = findViewById(R.id.tvStepCount);
         title = findViewById(R.id.tvPermissionTitle);
         body = findViewById(R.id.tvPermissionBody);
         status = findViewById(R.id.tvPermissionStatus);
+        note = findViewById(R.id.tvPermissionNote);
         grantButton = findViewById(R.id.btnGrant);
         backButton = findViewById(R.id.btnBack);
         nextButton = findViewById(R.id.btnNext);
@@ -109,14 +85,18 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> renderCurrentStep()
         );
-        notificationPermLauncher = registerForActivityResult(
-                new ActivityResultContracts.RequestPermission(),
-                granted -> renderCurrentStep()
-        );
 
         grantButton.setOnClickListener(v -> openPermissionSettings(steps[currentStepIndex]));
         backButton.setOnClickListener(v -> {
+            PermissionStep step = steps[currentStepIndex];
+            if (isGranted(step)) {
+                askToRemovePermissionBeforeBack(step);
+                return;
+            }
             if (currentStepIndex == 0) {
+                Intent intent = new Intent(this, PersonalFeatureTourActivity.class);
+                intent.putExtra("openLastPage", true);
+                startActivity(intent);
                 finish();
                 return;
             }
@@ -130,6 +110,12 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
                 return;
             }
             if (currentStepIndex == steps.length - 1) {
+                if (!RequiredPermissions.allGranted(this)) {
+                    SessionPrefs.setPersonalPermissionsComplete(this, false);
+                    Toast.makeText(this, "All required permissions must be granted.", Toast.LENGTH_SHORT).show();
+                    renderCurrentStep();
+                    return;
+                }
                 SessionPrefs.setPersonalPermissionsComplete(this, true);
                 Intent intent = new Intent(this, AuthenticationActivity.class);
                 startActivity(intent);
@@ -141,13 +127,6 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
         });
 
         renderCurrentStep();
-        // Auto-trigger first permission request if not granted
-        if (!isGranted(steps[0])) {
-            // Delay to ensure UI is rendered first
-            findViewById(R.id.main).postDelayed(() -> {
-                openPermissionSettings(steps[0]);
-            }, 500);
-        }
     }
 
     @Override
@@ -170,22 +149,19 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
         } else if (step == PermissionStep.USAGE_ACCESS) {
             title.setText("Allow usage access");
             body.setText("Usage access powers app-time tracking and lock rules, so we can reduce screen-time distractions.");
-        } else if (step == PermissionStep.NOTIFICATION_ACCESS) {
-            title.setText("Allow notification access");
-            body.setText("Notification access lets PureLauncher count alerts and sync notification activity for the parent dashboard.");
-        } else {
-            // POST_NOTIFICATIONS (API 33+ only)
-            title.setText("Allow notification permission");
-            body.setText("Android 13+ requires explicit permission to show notifications. Tap \"Grant\" to allow.");
         }
 
         boolean granted = isGranted(step);
+        boolean permissionRevoked = getIntent().getBooleanExtra("permissionRevoked", false);
         status.setText(granted ? "Status: Granted" : "Status: Required");
         grantButton.setText(granted ? "Granted" : "Grant Permission");
         grantButton.setEnabled(!granted);
+        note.setText(permissionRevoked && !RequiredPermissions.allGranted(this)
+                ? "Permission not granted. To use the app, please grant the required permission. Until then, the app will not work."
+                : "Required items: default home, overlay, and usage access.");
 
-        backButton.setEnabled(currentStepIndex > 0);
-        backButton.setAlpha(currentStepIndex > 0 ? 1f : 0.55f);
+        backButton.setEnabled(true);
+        backButton.setAlpha(1f);
         nextButton.setEnabled(granted);
         nextButton.setAlpha(granted ? 1f : 0.55f);
         nextButton.setText(currentStepIndex == steps.length - 1 ? "Continue" : "Next");
@@ -200,33 +176,14 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
         }
 
         if (step == PermissionStep.DEFAULT_HOME) {
-            RoleManager roleManager = getSystemService(RoleManager.class);
-            if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) {
-                roleRequestLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME));
-                return;
-            }
-            Intent fallback = new Intent(Settings.ACTION_HOME_SETTINGS);
-            settingsLauncher.launch(fallback);
+            roleRequestLauncher.launch(RequiredPermissions.defaultHomeIntent(this));
             return;
         }
 
         if (step == PermissionStep.USAGE_ACCESS) {
             Intent usageIntent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
             settingsLauncher.launch(usageIntent);
-            return;
         }
-
-        if (step == PermissionStep.POST_NOTIFICATIONS) {
-            // Runtime permission dialog — only reachable on API 33+ (guarded by step list).
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                notificationPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
-            }
-            return;
-        }
-
-        // NOTIFICATION_ACCESS — system notification listener settings
-        Intent notificationIntent = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
-        settingsLauncher.launch(notificationIntent);
     }
 
     private boolean isGranted(PermissionStep step) {
@@ -234,66 +191,20 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
             return Settings.canDrawOverlays(this);
         }
         if (step == PermissionStep.DEFAULT_HOME) {
-            return isDefaultLauncher();
+            return RequiredPermissions.isDefaultLauncher(this);
         }
         if (step == PermissionStep.USAGE_ACCESS) {
-            return hasUsageAccess();
+            return RequiredPermissions.hasUsageAccess(this);
         }
-        if (step == PermissionStep.POST_NOTIFICATIONS) {
-            // Only reachable on API 33+; always true on older versions (step is excluded).
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                return ContextCompat.checkSelfPermission(this,
-                        Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
-            }
-            return true;
-        }
-        return hasNotificationAccess();
+        return false;
     }
 
-    private boolean isDefaultLauncher() {
-        Intent homeIntent = new Intent(Intent.ACTION_MAIN);
-        homeIntent.addCategory(Intent.CATEGORY_HOME);
-        PackageManager packageManager = getPackageManager();
-        android.content.pm.ResolveInfo resolveInfo = packageManager.resolveActivity(
-                homeIntent,
-                PackageManager.MATCH_DEFAULT_ONLY
-        );
-        if (resolveInfo == null || resolveInfo.activityInfo == null) {
-            return false;
-        }
-        return getPackageName().equals(resolveInfo.activityInfo.packageName);
-    }
-
-    private boolean hasUsageAccess() {
-        AppOpsManager appOpsManager = (AppOpsManager) getSystemService(APP_OPS_SERVICE);
-        if (appOpsManager == null) {
-            return false;
-        }
-        int mode;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            mode = appOpsManager.unsafeCheckOpNoThrow(
-                    AppOpsManager.OPSTR_GET_USAGE_STATS,
-                    Process.myUid(),
-                    getPackageName()
-            );
-        } else {
-            mode = appOpsManager.checkOpNoThrow(
-                    AppOpsManager.OPSTR_GET_USAGE_STATS,
-                    Process.myUid(),
-                    getPackageName()
-            );
-        }
-        return mode == AppOpsManager.MODE_ALLOWED;
-    }
-
-    private boolean hasNotificationAccess() {
-        String enabledListeners = Settings.Secure.getString(
-                getContentResolver(),
-                "enabled_notification_listeners"
-        );
-        if (enabledListeners == null || enabledListeners.trim().isEmpty()) {
-            return false;
-        }
-        return enabledListeners.contains(getPackageName());
+    private void askToRemovePermissionBeforeBack(PermissionStep step) {
+        new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setTitle("Remove current permission?")
+                .setMessage("To go back, remove this permission in system settings first. PureLauncher will stay on this step until it is removed.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Open Settings", (dialog, which) -> openPermissionSettings(step))
+                .show();
     }
 }

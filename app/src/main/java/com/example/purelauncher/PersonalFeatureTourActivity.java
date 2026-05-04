@@ -91,6 +91,9 @@ public class PersonalFeatureTourActivity extends AppCompatActivity {
         backButton.setOnClickListener(v -> {
             int current = viewPager.getCurrentItem();
             if (current == 0) {
+                Intent intent = new Intent(this, OnboardingActivity.class);
+                intent.putExtra("forceRoleSelection", true);
+                startActivity(intent);
                 finish();
                 return;
             }
@@ -106,15 +109,21 @@ public class PersonalFeatureTourActivity extends AppCompatActivity {
             SessionPrefs.setPersonalTourComplete(this, true);
             Intent intent = new Intent(this, PersonalPermissionsActivity.class);
             startActivity(intent);
+            finish();
         });
 
-        renderControls(0, pages.size());
+        if (getIntent().getBooleanExtra("openLastPage", false)) {
+            viewPager.setCurrentItem(pages.size() - 1, false);
+            renderControls(pages.size() - 1, pages.size());
+        } else {
+            renderControls(0, pages.size());
+        }
     }
 
     private void renderControls(int position, int total) {
         counterText.setText((position + 1) + " / " + total);
-        backButton.setEnabled(position > 0);
-        backButton.setAlpha(position > 0 ? 1f : 0.55f);
+        backButton.setEnabled(true);
+        backButton.setAlpha(1f);
         nextButton.setText(position == total - 1 ? "Continue" : "Next");
     }
 

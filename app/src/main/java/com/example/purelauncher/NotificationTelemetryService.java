@@ -3,15 +3,19 @@ package com.example.purelauncher;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 
+/**
+ * DEPRECATED: Notification tracking has been removed from the codebase.
+ * This service is kept as a stub to avoid manifest errors if not removed there yet.
+ */
 public class NotificationTelemetryService extends NotificationListenerService {
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
-        if (sbn == null) return;
-        if (SessionPrefs.getRole(this) == SessionPrefs.Role.CHILD) {
-            // Track per-package count for the notifications filter in ScreenTimeActivity
-            TelemetryLocalStore.incrementNotification(this, sbn.getPackageName());
-            new TelemetryRepository().syncCurrentChild(this);
-        }
+        // Feature removed
+    }
+
+    @Override
+    public void onNotificationRemoved(StatusBarNotification sbn) {
+        // Feature removed
     }
 }

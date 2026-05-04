@@ -5,7 +5,6 @@ final class TelemetrySnapshot {
     final long[] dailyUsageMinutes;
     final long monthlyScreenTimeMinutes;
     final long[] monthlyUsageMinutes;
-    final int notificationCount;
     final int unlockCount;
     final int frictionCount;
     final int vaultedCount;
@@ -14,7 +13,6 @@ final class TelemetrySnapshot {
                       long[] dailyUsageMinutes,
                       long monthlyScreenTimeMinutes,
                       long[] monthlyUsageMinutes,
-                      int notificationCount,
                       int unlockCount,
                       int frictionCount,
                       int vaultedCount) {
@@ -22,7 +20,6 @@ final class TelemetrySnapshot {
         this.dailyUsageMinutes = dailyUsageMinutes == null ? new long[7] : dailyUsageMinutes;
         this.monthlyScreenTimeMinutes = monthlyScreenTimeMinutes;
         this.monthlyUsageMinutes = monthlyUsageMinutes == null ? new long[30] : monthlyUsageMinutes;
-        this.notificationCount = notificationCount;
         this.unlockCount = unlockCount;
         this.frictionCount = frictionCount;
         this.vaultedCount = vaultedCount;

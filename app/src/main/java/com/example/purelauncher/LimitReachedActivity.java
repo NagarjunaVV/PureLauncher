@@ -40,7 +40,16 @@ public class LimitReachedActivity extends AppCompatActivity {
             }
         }
 
-        findViewById(R.id.ivClose).setOnClickListener(v -> finish());
-        findViewById(R.id.btnBackToVault).setOnClickListener(v -> finish());
+        findViewById(R.id.ivClose).setOnClickListener(v -> returnToVault());
+        findViewById(R.id.btnBackToVault).setOnClickListener(v -> returnToVault());
+    }
+
+    private void returnToVault() {
+        android.content.Intent intent = new android.content.Intent(this, LauncherActivity.class);
+        intent.putExtra("openVault", true);
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
     }
 }

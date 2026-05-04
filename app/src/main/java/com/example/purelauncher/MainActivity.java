@@ -63,8 +63,11 @@ public class MainActivity extends AppCompatActivity {
                 && !SessionPrefs.isPersonalTourComplete(this)) {
             nextIntent = new Intent(this, PersonalFeatureTourActivity.class);
         } else if (role == SessionPrefs.Role.CHILD
-                && !SessionPrefs.isPersonalPermissionsComplete(this)) {
+                && (!SessionPrefs.isPersonalPermissionsComplete(this)
+                || !RequiredPermissions.allGranted(this))) {
+            SessionPrefs.setPersonalPermissionsComplete(this, false);
             nextIntent = new Intent(this, PersonalPermissionsActivity.class);
+            nextIntent.putExtra("permissionRevoked", true);
         } else if (role == SessionPrefs.Role.CHILD
             && (!SessionPrefs.isChildAuthComplete(this)
             || FirebaseAuth.getInstance().getCurrentUser() == null)) {

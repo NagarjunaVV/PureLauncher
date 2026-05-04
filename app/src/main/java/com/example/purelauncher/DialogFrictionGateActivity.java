@@ -1,7 +1,6 @@
 package com.example.purelauncher;
 
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
@@ -83,8 +82,8 @@ public class DialogFrictionGateActivity extends AppCompatActivity {
         requiredClicks = VaultPrefs.getRequiredClicks(this, packageName);
         updateUI();
 
-        findViewById(R.id.ivClose).setOnClickListener(v -> finish());
-        findViewById(R.id.tvChangedMind).setOnClickListener(v -> finish());
+        findViewById(R.id.ivClose).setOnClickListener(v -> returnToVault());
+        findViewById(R.id.tvChangedMind).setOnClickListener(v -> returnToVault());
 
         btnUnlock.setOnClickListener(v -> {
             currentClicks++;
@@ -94,7 +93,7 @@ public class DialogFrictionGateActivity extends AppCompatActivity {
                 updateUI();
                 if (SessionPrefs.getRole(this) == SessionPrefs.Role.CHILD) {
                     TelemetryLocalStore.incrementFriction(this);
-                    new TelemetryRepository().syncCurrentChild(this);
+                    // Firestore sync removed as per request
                 }
             }
         });
@@ -142,6 +141,7 @@ public class DialogFrictionGateActivity extends AppCompatActivity {
 
     private void launchApp() {
         VaultPrefs.incrementDailyClicks(this, packageName);
+        VaultPrefs.setLastUnlockedPkg(this, packageName);
         Intent launchIntent = getPackageManager().getLaunchIntentForPackage(packageName);
         if (launchIntent != null) {
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
@@ -149,6 +149,14 @@ public class DialogFrictionGateActivity extends AppCompatActivity {
         } else {
             Toast.makeText(this, "Could not launch app", Toast.LENGTH_SHORT).show();
         }
+        finish();
+    }
+
+    private void returnToVault() {
+        Intent intent = new Intent(this, LauncherActivity.class);
+        intent.putExtra("openVault", true);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
         finish();
     }
 }

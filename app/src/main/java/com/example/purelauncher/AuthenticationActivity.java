@@ -46,8 +46,11 @@ public class AuthenticationActivity extends AppCompatActivity {
 
     private void openChildAuthenticationStep() {
         Intent intent;
-        if (!SessionPrefs.isPersonalPermissionsComplete(this)) {
+        if (!SessionPrefs.isPersonalPermissionsComplete(this)
+                || !RequiredPermissions.allGranted(this)) {
+            SessionPrefs.setPersonalPermissionsComplete(this, false);
             intent = new Intent(this, PersonalPermissionsActivity.class);
+            intent.putExtra("permissionRevoked", true);
         } else if (FirebaseAuth.getInstance().getCurrentUser() != null) {
             SessionPrefs.setChildAuthComplete(this, true);
             intent = new Intent(this, LauncherActivity.class);

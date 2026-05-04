@@ -91,6 +91,9 @@ public class ParentFeatureTourActivity extends AppCompatActivity {
         backButton.setOnClickListener(v -> {
             int current = viewPager.getCurrentItem();
             if (current == 0) {
+                Intent intent = new Intent(this, OnboardingActivity.class);
+                intent.putExtra("forceRoleSelection", true);
+                startActivity(intent);
                 finish();
                 return;
             }
@@ -113,8 +116,8 @@ public class ParentFeatureTourActivity extends AppCompatActivity {
 
     private void renderControls(int position, int total) {
         counterText.setText((position + 1) + " / " + total);
-        backButton.setEnabled(position > 0);
-        backButton.setAlpha(position > 0 ? 1f : 0.55f);
+        backButton.setEnabled(true);
+        backButton.setAlpha(1f);
         nextButton.setText(position == total - 1 ? "Continue" : "Next");
     }
 

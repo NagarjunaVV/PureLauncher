@@ -11,7 +11,7 @@
         android:id="@+id/tvStepCount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Step 1 of 3"
+        android:text="Personal setup"
         android:textColor="@color/text_secondary"
         android:textSize="14sp"
         app:layout_constraintTop_toTopOf="parent"
@@ -28,7 +28,7 @@
         app:layout_constraintBottom_toTopOf="@id/btnBack"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="18dp"
+        android:layout_marginTop="20dp"
         android:layout_marginBottom="18dp">
 
         <LinearLayout
@@ -81,6 +81,7 @@
                 android:backgroundTint="@color/bg_button" />
 
             <TextView
+                android:id="@+id/tvPermissionNote"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"

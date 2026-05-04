@@ -6,14 +6,6 @@
         <entry key="Firebase Crashlytics">
           <value>
             <InsightsFilterSettings>
-              <option name="connection">
-                <ConnectionSetting>
-                  <option name="appId" value="com.example.purelauncher" />
-                  <option name="mobileSdkAppId" value="1:726674559758:android:81e44d9d4427db582ebd5f" />
-                  <option name="projectId" value="purelauncher" />
-                  <option name="projectNumber" value="726674559758" />
-                </ConnectionSetting>
-              </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
               <option name="timeIntervalDays" value="THIRTY_DAYS" />
               <option name="visibilityType" value="ALL" />

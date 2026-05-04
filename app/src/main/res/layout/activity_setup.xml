@@ -9,7 +9,7 @@
         android:id="@+id/tvSetup"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Your experience is being prepared."
+        android:text="Your app is getting ready."
         android:textColor="@color/text_primary"
         android:textSize="18sp"
         app:layout_constraintTop_toTopOf="parent"

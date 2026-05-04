@@ -38,9 +38,14 @@ public class OnboardingActivity extends AppCompatActivity {
 
         rbParent = findViewById(R.id.rbParent);
         rbChild = findViewById(R.id.rbChild);
+        SessionPrefs.Role savedRole = SessionPrefs.getRole(this);
+        if (savedRole != null) {
+            selectRole(savedRole);
+        }
 
         // Check if role is already selected; if so, route to next screen
-        if (SessionPrefs.getRole(this) != null) {
+        if (!getIntent().getBooleanExtra("forceRoleSelection", false)
+                && savedRole != null) {
             openNextStep();
             return;
         }

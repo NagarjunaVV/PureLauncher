@@ -16,9 +16,6 @@ import com.google.firebase.auth.FirebaseUser;
 
 public class ActivityParentDashboardActivity extends AppCompatActivity {
 
-    private final TelemetryRepository telemetryRepository = new TelemetryRepository();
-    private final UserProfileStore userProfileStore = new UserProfileStore();
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -34,90 +31,24 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         findViewById(R.id.btnPolicies).setOnClickListener(v -> open(PolicyManagerActivity.class));
         findViewById(R.id.btnAddTime).setOnClickListener(v -> open(UsageRestrictActivity.class));
 
-        bindLinkedChildTelemetry();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        bindLinkedChildTelemetry();
+        bindStaticTelemetry();
     }
 
     private void open(Class<?> activityClass) {
         startActivity(new Intent(this, activityClass));
     }
 
-    private void bindLinkedChildTelemetry() {
-        FirebaseUser parentUser = FirebaseAuth.getInstance().getCurrentUser();
+    private void bindStaticTelemetry() {
+        // Firebase logic for child monitoring removed as per request.
+        // This will be re-implemented later.
         TextView monitoring = findViewById(R.id.tvMonitoring);
         TextView totalTime = findViewById(R.id.tvTotalTime);
         TextView frictionGates = findViewById(R.id.tvFrictionGates);
         BarChartView chart = findViewById(R.id.lineChart);
 
-        if (parentUser == null) {
-            monitoring.setText("Monitoring: no parent session");
-            chart.setSamples(flatSamples());
-            return;
-        }
-
-        userProfileStore.getLinkedChildUid(parentUser).addOnCompleteListener(linkTask -> {
-            if (!linkTask.isSuccessful() || linkTask.getResult() == null || linkTask.getResult().trim().isEmpty()) {
-                monitoring.setText("Monitoring: no child linked");
-                totalTime.setText("0h 00m");
-                frictionGates.setText("0");
-                chart.setSamples(flatSamples());
-                return;
-            }
-
-            String childUid = linkTask.getResult().trim();
-            telemetryRepository.getLatestSnapshotForChild(childUid).addOnCompleteListener(metricsTask -> {
-                if (!metricsTask.isSuccessful() || metricsTask.getResult() == null) {
-                    monitoring.setText("Monitoring: child linked, waiting for sync");
-                    chart.setSamples(flatSamples());
-                    return;
-                }
-
-                TelemetrySnapshot snapshot = metricsTask.getResult();
-                totalTime.setText(formatMinutes(snapshot.weeklyScreenTimeMinutes));
-                frictionGates.setText(String.valueOf(snapshot.frictionCount));
-                chart.setSamples(normalize(snapshot.dailyUsageMinutes));
-                monitoring.setText(
-                        "Monitoring child: "
-                                + childUid.substring(0, Math.min(6, childUid.length()))
-                                + "  |  Notifications " + snapshot.notificationCount
-                                + "  |  Unlocks " + snapshot.unlockCount
-                                + "  |  Vaulted " + snapshot.vaultedCount
-                );
-            });
-        });
-    }
-
-    private String formatMinutes(long minutes) {
-        long hours = minutes / 60;
-        long remainder = minutes % 60;
-        return hours + "h " + remainder + "m";
-    }
-
-    private float[] normalize(long[] values) {
-        if (values == null || values.length == 0) {
-            return flatSamples();
-        }
-        long max = 1;
-        for (long value : values) {
-            if (value > max) {
-                max = value;
-            }
-        }
-
-        float[] normalized = new float[values.length];
-        for (int i = 0; i < values.length; i++) {
-            float scaled = (float) values[i] / (float) max;
-            normalized[i] = Math.max(0.1f, Math.min(1f, scaled));
-        }
-        return normalized;
-    }
-
-    private float[] flatSamples() {
-        return new float[]{0.2f, 0.2f, 0.2f, 0.2f, 0.2f, 0.2f, 0.2f};
+        monitoring.setText("Monitoring: Offline Mode");
+        totalTime.setText("0h 00m");
+        frictionGates.setText("0");
+        chart.setSamples(new float[]{0.1f, 0.1f, 0.1f, 0.1f, 0.1f, 0.1f, 0.1f});
     }
 }

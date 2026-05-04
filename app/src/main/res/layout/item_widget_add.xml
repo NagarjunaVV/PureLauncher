@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- "Add shortcut" tile — always the last cell in the grid -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -12,16 +11,14 @@
     android:focusable="true"
     android:foreground="?attr/selectableItemBackgroundBorderless">
 
-    <!-- Plus circle -->
-    <TextView
+    <ImageView
+        android:id="@+id/ivWidgetIcon"
         android:layout_width="52dp"
         android:layout_height="52dp"
-        android:gravity="center"
-        android:text="+"
-        android:textColor="#888888"
-        android:textSize="28sp"
-        android:background="#2A2A2A"
-        android:id="@+id/ivWidgetIcon" />
+        android:padding="12dp"
+        android:src="@drawable/ic_add"
+        android:tint="#888888"
+        android:background="#2A2A2A" />
 
     <TextView
         android:id="@+id/tvWidgetName"

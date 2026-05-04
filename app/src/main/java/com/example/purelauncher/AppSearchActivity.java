@@ -288,8 +288,15 @@ public class AppSearchActivity extends AppCompatActivity {
                                     Uri.parse("package:" + app.packageName)));
                             break;
                         case 2: // Uninstall
-                            startActivity(new Intent(Intent.ACTION_DELETE,
-                                    Uri.parse("package:" + app.packageName)));
+                            Intent uninstallIntent = new Intent(Intent.ACTION_DELETE);
+                            uninstallIntent.setData(Uri.fromParts("package", app.packageName, null));
+                            uninstallIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            try {
+                                startActivity(uninstallIntent);
+                            } catch (android.content.ActivityNotFoundException ignored) {
+                                startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        Uri.fromParts("package", app.packageName, null)));
+                            }
                             break;
                     }
                 })

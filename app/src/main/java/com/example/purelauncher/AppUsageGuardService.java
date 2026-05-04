@@ -1,10 +1,13 @@
 package com.example.purelauncher;
 
 import android.app.Service;
+import android.app.usage.UsageEvents;
 import android.app.usage.UsageStats;
 import android.app.usage.UsageStatsManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -19,21 +22,45 @@ import java.util.TreeMap;
 
 /**
  * Background service that monitors the currently open app.
- * If the app is in the vault and its limit is reached, it closes the app and shows the LimitReachedActivity.
+ * 1. If the app is in the vault and its limit is reached, it blocks the app.
+ * 2. If the app is in the vault and was not unlocked via the friction gate, it shows the gate.
  */
 public class AppUsageGuardService extends Service {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private String lastTopPackage = "";
+    private String activePackage = "";
+    private long activePackageStartedAt = 0L;
+    private String currentBlockPackage = "";
+    
+    private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                // Clear last unlocked when screen goes off so re-entry requires friction
+                VaultPrefs.setLastUnlockedPkg(context, "");
+            }
+        }
+    };
+
     private final Runnable monitorRunnable = new Runnable() {
         @Override
         public void run() {
             checkCurrentAppUsage();
-            handler.postDelayed(this, 5000); // Check every 5 seconds
+            handler.postDelayed(this, 1000); // Check every 1 second for "immediate" response
         }
     };
 
     @Override
+    public void onCreate() {
+        super.onCreate();
+        IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
+        registerReceiver(screenReceiver, filter);
+    }
+
+    @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        handler.removeCallbacks(monitorRunnable);
         handler.post(monitorRunnable);
         return START_STICKY;
     }
@@ -43,35 +70,86 @@ public class AppUsageGuardService extends Service {
         if (topPackage == null) return;
 
         Set<String> vaulted = VaultPrefs.getVaultedPackages(this);
+
+        // Logic for re-triggering friction on app switch or re-entry
+        if (!topPackage.equals(lastTopPackage)) {
+            activePackage = topPackage;
+            activePackageStartedAt = System.currentTimeMillis();
+            if (!topPackage.equals(currentBlockPackage)) {
+                currentBlockPackage = "";
+            }
+            // If we moved away FROM a vaulted app, clear the "unlocked" status
+            // so that if they go back to it (even from RAM), the gate appears again.
+            if (vaulted.contains(lastTopPackage) && !topPackage.equals(lastTopPackage)) {
+                VaultPrefs.setLastUnlockedPkg(this, "");
+            }
+            lastTopPackage = topPackage;
+        }
+
         if (vaulted.contains(topPackage)) {
+            // 1. Check App Limit
             int limitMinutes = VaultPrefs.getAppLimitMinutes(this, topPackage);
             if (limitMinutes > 0) {
-                // Get usage for today
-                TelemetryRepository repo = new TelemetryRepository();
-                List<TelemetryRepository.AppUsageEntry> usageList = repo.getAppUsageForDate(this, LocalDate.now());
-                long currentMins = 0;
-                for (TelemetryRepository.AppUsageEntry entry : usageList) {
-                    if (entry.packageName.equals(topPackage)) {
-                        currentMins = entry.minutes;
-                        break;
-                    }
+                long currentMs = getLiveUsageMs(topPackage);
+                if (currentMs >= limitMinutes * 60_000L) {
+                    blockApp(topPackage);
+                    return; // Don't check friction if blocked
                 }
+            }
 
-                if (currentMins >= limitMinutes) {
-                    // Block the app
-                    Intent intent = new Intent(this, LimitReachedActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    intent.putExtra("packageName", topPackage);
-                    intent.putExtra("appName", getAppName(topPackage));
-                    startActivity(intent);
+            // 2. Check Friction Gate
+            // If the top app is vaulted but it's not recorded as "recently unlocked"
+            if (!topPackage.equals(VaultPrefs.getLastUnlockedPkg(this))) {
+                // Also ensure we aren't already showing the gate (which is in our own package)
+                if (!topPackage.equals(getPackageName())) {
+                    showFrictionGate(topPackage);
                 }
             }
         }
     }
 
+    private void blockApp(String packageName) {
+        if (packageName.equals(currentBlockPackage)) {
+            return;
+        }
+        currentBlockPackage = packageName;
+        Intent intent = new Intent(this, LimitReachedActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        intent.putExtra("packageName", packageName);
+        intent.putExtra("appName", getAppName(packageName));
+        startActivity(intent);
+    }
+
+    private void showFrictionGate(String packageName) {
+        Intent intent = new Intent(this, DialogFrictionGateActivity.class);
+        // FLAG_ACTIVITY_REORDER_TO_FRONT helps if it's already in the back stack
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        intent.putExtra("packageName", packageName);
+        intent.putExtra("appName", getAppName(packageName));
+        startActivity(intent);
+    }
+
     private String getTopPackageName() {
         UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
         long now = System.currentTimeMillis();
+        UsageEvents events = usm.queryEvents(now - 10_000L, now);
+        String lastResumedPackage = null;
+        long lastResumedAt = 0L;
+        if (events != null) {
+            UsageEvents.Event event = new UsageEvents.Event();
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event);
+                if (event.getEventType() == UsageEvents.Event.ACTIVITY_RESUMED
+                        && event.getTimeStamp() >= lastResumedAt) {
+                    lastResumedPackage = event.getPackageName();
+                    lastResumedAt = event.getTimeStamp();
+                }
+            }
+        }
+        if (lastResumedPackage != null) {
+            return lastResumedPackage;
+        }
+        // Look back 10 seconds to find usage events
         List<UsageStats> stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 1000 * 10, now);
         if (stats != null && !stats.isEmpty()) {
             SortedMap<Long, UsageStats> sortedStats = new TreeMap<>();
@@ -85,6 +163,15 @@ public class AppUsageGuardService extends Service {
         return null;
     }
 
+    private long getLiveUsageMs(String packageName) {
+        TelemetryRepository repo = new TelemetryRepository();
+        long usageMs = repo.getAppUsageMsForDate(this, LocalDate.now(), packageName);
+        if (packageName.equals(activePackage) && activePackageStartedAt > 0L) {
+            usageMs += Math.max(0L, System.currentTimeMillis() - activePackageStartedAt);
+        }
+        return usageMs;
+    }
+
     private String getAppName(String packageName) {
         try {
             return getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(packageName, 0)).toString();
@@ -95,6 +182,7 @@ public class AppUsageGuardService extends Service {
 
     @Override
     public void onDestroy() {
+        unregisterReceiver(screenReceiver);
         handler.removeCallbacks(monitorRunnable);
         super.onDestroy();
     }

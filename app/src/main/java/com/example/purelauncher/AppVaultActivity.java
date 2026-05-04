@@ -30,6 +30,5 @@ public class AppVaultActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        new TelemetryRepository().syncCurrentChild(this);
     }
 }

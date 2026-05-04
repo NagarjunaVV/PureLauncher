@@ -19,7 +19,6 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsetsController;
-import android.provider.AlarmClock;
 import android.provider.CalendarContract;
 import android.provider.MediaStore;
 import android.provider.Settings;
@@ -39,7 +38,6 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.purelauncher.ui.views.BarChartView;
@@ -64,7 +62,7 @@ public class LauncherActivity extends AppCompatActivity {
     };
 
     private final TelemetryRepository repo = new TelemetryRepository();
-    private final UserProfileStore profileStore = new UserProfileStore();
+    // profileStore kept for auth state routing but cloud sync features removed
 
     private int currentPage = PAGE_HOME;
     private boolean navExpanded = false;
@@ -73,7 +71,6 @@ public class LauncherActivity extends AppCompatActivity {
     private TelemetrySnapshot snap;
     private float swipeStartY = -1;
     private boolean isSwipingUp = false;
-    // Track if we've already built the drawer sidebar in this session
     private boolean drawerSidebarBuilt = false;
 
     private View pageHome, pageWidgets, pageVault, pageQr;
@@ -125,7 +122,6 @@ public class LauncherActivity extends AppCompatActivity {
             v.setPadding(sb.left, sb.top, sb.right, sb.bottom);
             return ins;
         });
-        // Block the notification shade from being pulled down
         blockNotificationShade();
 
         DisplayMetrics dm = new DisplayMetrics();
@@ -161,16 +157,42 @@ public class LauncherActivity extends AppCompatActivity {
 
         bindHeadline();
         bindMetrics();
-        bindLinkedParent();
-        showPage(PAGE_HOME);
+        showPage(getIntent().getBooleanExtra("openVault", false) ? PAGE_VAULT : PAGE_HOME);
+
+        if (SessionPrefs.getRole(this) == SessionPrefs.Role.CHILD) {
+            startService(new Intent(this, AppUsageGuardService.class));
+        }
     }
 
     @Override protected void onResume() {
         super.onResume();
+        if (SessionPrefs.getRole(this) == SessionPrefs.Role.CHILD
+                && !RequiredPermissions.allGranted(this)) {
+            SessionPrefs.setPersonalPermissionsComplete(this, false);
+            Intent intent = new Intent(this, PersonalPermissionsActivity.class);
+            intent.putExtra("permissionRevoked", true);
+            startActivity(intent);
+            finish();
+            return;
+        }
         startClockUpdates();
         blockNotificationShade();
         reloadDrawerApps();
         refreshVaultPage();
+        bindMetrics(); // Refresh local stats
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent.getBooleanExtra("openVault", false)) {
+            if (drawerOpen) {
+                closeDrawer();
+            }
+            showPage(PAGE_VAULT);
+            refreshVaultPage();
+        }
     }
 
     @Override protected void onPause() {
@@ -184,7 +206,6 @@ public class LauncherActivity extends AppCompatActivity {
         if (hasFocus) blockNotificationShade();
     }
 
-    /** Prevents the notification shade from being pulled down. */
     private void blockNotificationShade() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             WindowInsetsController wic = getWindow().getInsetsController();
@@ -228,7 +249,7 @@ public class LauncherActivity extends AppCompatActivity {
             case MotionEvent.ACTION_MOVE:
                 if (swipeStartY > 0 && currentPage == PAGE_HOME) {
                     float dy = swipeStartY - ev.getRawY();
-                    if (dy > 50) { // Start drag threshold
+                    if (dy > 50) {
                         isSwipingUp = true;
                         appDrawerSheet.setTranslationY(Math.max(0, screenH - dy));
                     }
@@ -252,7 +273,7 @@ public class LauncherActivity extends AppCompatActivity {
         return super.dispatchTouchEvent(ev);
     }
 
-    // ── Drawer (bottom sheet) ─────────────────────────────────────────────────
+    // ── Drawer ────────────────────────────────────────────────────────────────
 
     private static final String LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private TextView[] drawerLetterViews;
@@ -268,7 +289,6 @@ public class LauncherActivity extends AppCompatActivity {
         rv.setLayoutManager(drawerLayoutManager);
         drawerAdapter = new AppSearchAdapter(this, allApps);
         drawerAdapter.setOnAppClickListener(app -> {
-            // Launch immediately — don't wait for the close animation
             Intent launchIntent = getPackageManager().getLaunchIntentForPackage(app.packageName);
             if (launchIntent != null) {
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
@@ -418,7 +438,6 @@ public class LauncherActivity extends AppCompatActivity {
                     String q = et != null ? et.getText().toString() : "";
                     filterDrawer(q);
                 }
-                // Only build sidebar if not already built in this session (avoid expensive view creation)
                 if (!drawerSidebarBuilt) {
                     buildDrawerLetterSidebar();
                     drawerSidebarBuilt = true;
@@ -461,7 +480,6 @@ public class LauncherActivity extends AppCompatActivity {
                 .setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f))
                 .withEndAction(() -> {
                     appDrawerSheet.setLayerType(View.LAYER_TYPE_NONE, null);
-                    // Clear search on close
                     EditText et = appDrawerSheet.findViewById(R.id.etSearchApps);
                     if (et != null) et.setText("");
                 })
@@ -470,9 +488,12 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void showAppContextMenu(AppSearchActivity.AppEntry app) {
+        showAppContextMenu(app, false);
+    }
+
+    private void showAppContextMenu(AppSearchActivity.AppEntry app, boolean vaultOnly) {
         dismissContextMenuOverlay();
 
-        // Create a full-screen dim overlay within the drawer
         android.widget.FrameLayout overlay = new android.widget.FrameLayout(this);
         overlay.setBackgroundColor(0xCC000000);
         overlay.setClickable(true);
@@ -492,6 +513,15 @@ public class LauncherActivity extends AppCompatActivity {
         boolean inVault = VaultPrefs.getVaultedPackages(this).contains(app.packageName);
         TextView tvVaultAction = menuView.findViewById(R.id.tvVaultAction);
         tvVaultAction.setText(inVault ? "Remove from Vault" : "Add to Vault");
+        int vaultToolsVisibility = inVault ? View.VISIBLE : View.GONE;
+        menuView.findViewById(R.id.divFrictionTop).setVisibility(vaultToolsVisibility);
+        menuView.findViewById(R.id.btnChangeFriction).setVisibility(vaultToolsVisibility);
+        menuView.findViewById(R.id.divLimitTop).setVisibility(vaultToolsVisibility);
+        menuView.findViewById(R.id.btnAppLimit).setVisibility(vaultToolsVisibility);
+        menuView.findViewById(R.id.divAppInfoTop).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
+        menuView.findViewById(R.id.btnAppInfo).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
+        menuView.findViewById(R.id.divUninstallTop).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
+        menuView.findViewById(R.id.btnUninstall).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
 
         menuView.findViewById(R.id.btnToggleVault).setOnClickListener(v -> {
             if (inVault) VaultPrefs.removeVaultedPackage(this, app.packageName);
@@ -509,18 +539,29 @@ public class LauncherActivity extends AppCompatActivity {
         });
 
         menuView.findViewById(R.id.btnUninstall).setOnClickListener(v -> {
-            startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + app.packageName)));
+            openUninstall(app);
             dismissContextMenuOverlay();
         });
 
-        // Add overlay to the drawer sheet
-        ((android.widget.FrameLayout) appDrawerSheet).addView(overlay,
+        menuView.findViewById(R.id.btnChangeFriction).setOnClickListener(v -> {
+            dismissContextMenuOverlay();
+            showFrictionPicker(app);
+        });
+
+        menuView.findViewById(R.id.btnAppLimit).setOnClickListener(v -> {
+            dismissContextMenuOverlay();
+            showLimitPicker(app);
+        });
+
+        ViewGroup overlayParent = drawerOpen && appDrawerSheet instanceof ViewGroup
+                ? (ViewGroup) appDrawerSheet
+                : findViewById(android.R.id.content);
+        overlayParent.addView(overlay,
                 new android.widget.FrameLayout.LayoutParams(
                         android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
                         android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
         contextMenuOverlay = overlay;
 
-        // Animate in
         overlay.setAlpha(0f);
         overlay.animate().alpha(1f).setDuration(200).start();
         menuView.setScaleX(0.9f);
@@ -541,7 +582,20 @@ public class LauncherActivity extends AppCompatActivity {
         }
     }
 
-    // ── Vault page ────────────────────────────────────────────────────────────
+    private void openUninstall(AppSearchActivity.AppEntry app) {
+        Intent intent = new Intent(Intent.ACTION_DELETE);
+        intent.setData(Uri.fromParts("package", app.packageName, null));
+        intent.putExtra(Intent.EXTRA_RETURN_RESULT, false);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException ignored) {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + app.packageName)));
+        }
+    }
+
+    // ── Vault ─────────────────────────────────────────────────────────────────
 
     private void setupVaultPage() {
         if (pageVault == null) return;
@@ -642,26 +696,7 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void showVaultAppOptions(AppSearchActivity.AppEntry app) {
-        String[] options = {"Change Friction", "Add App Limit", "Remove from Vault"};
-        new AlertDialog.Builder(this, R.style.DarkDialog)
-                .setTitle(app.label)
-                .setItems(options, (dialog, which) -> {
-                    switch (which) {
-                        case 0: // Change Friction
-                            showFrictionPicker(app);
-                            break;
-                        case 1: // Add App Limit
-                            showLimitPicker(app);
-                            break;
-                        case 2: // Remove from Vault
-                            VaultPrefs.removeVaultedPackage(this, app.packageName);
-                            drawerSidebarBuilt = false;
-                            reloadDrawerApps();
-                            refreshVaultPage();
-                            break;
-                    }
-                })
-                .show();
+        showAppContextMenu(app, true);
     }
 
     private void showFrictionPicker(AppSearchActivity.AppEntry app) {
@@ -672,13 +707,14 @@ public class LauncherActivity extends AppCompatActivity {
         else if (currentType == VaultPrefs.FRICTION_X2) rg.check(R.id.rb2x);
         else if (currentType == VaultPrefs.FRICTION_X3) rg.check(R.id.rb3x);
 
-        BottomSheetDialog drawer = new BottomSheetDialog(this, R.style.DarkDialog);
-        drawer.setContentView(view);
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
         
         Button btnCancel = view.findViewById(R.id.btnCancel);
         Button btnOkay = view.findViewById(R.id.btnOkay);
         
-        if (btnCancel != null) btnCancel.setOnClickListener(v -> drawer.dismiss());
+        if (btnCancel != null) btnCancel.setOnClickListener(v -> dialog.dismiss());
         if (btnOkay != null) btnOkay.setOnClickListener(v -> {
             int type = VaultPrefs.FRICTION_PLUS_ONE;
             int checkedId = rg.getCheckedRadioButtonId();
@@ -687,10 +723,10 @@ public class LauncherActivity extends AppCompatActivity {
             
             VaultPrefs.setFrictionType(this, app.packageName, type);
             Toast.makeText(this, "Friction set for " + app.label, Toast.LENGTH_SHORT).show();
-            drawer.dismiss();
+            dialog.dismiss();
         });
         
-        drawer.show();
+        dialog.show();
     }
 
     private void showLimitPicker(AppSearchActivity.AppEntry app) {
@@ -707,26 +743,26 @@ public class LauncherActivity extends AppCompatActivity {
         TimePicker tp = view.findViewById(R.id.timePicker);
         tp.setIs24HourView(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            tp.setHour(0);
-            tp.setMinute(0);
+            tp.setHour(0); tp.setMinute(0);
         }
 
-        BottomSheetDialog drawer = new BottomSheetDialog(this, R.style.DarkDialog);
-        drawer.setContentView(view);
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
         
         Button btnCancel = view.findViewById(R.id.btnCancel);
         Button btnOkay = view.findViewById(R.id.btnOkay);
         
-        if (btnCancel != null) btnCancel.setOnClickListener(v -> drawer.dismiss());
+        if (btnCancel != null) btnCancel.setOnClickListener(v -> dialog.dismiss());
         if (btnOkay != null) btnOkay.setOnClickListener(v -> {
             int h = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? tp.getHour() : tp.getCurrentHour();
             int m = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? tp.getMinute() : tp.getCurrentMinute();
             VaultPrefs.setAppLimitMinutes(this, app.packageName, h * 60 + m);
             Toast.makeText(this, "Limit set to " + h + "h " + m + "m", Toast.LENGTH_SHORT).show();
-            drawer.dismiss();
+            dialog.dismiss();
         });
         
-        drawer.show();
+        dialog.show();
     }
 
     private void buildVaultLetterSidebar() {
@@ -766,7 +802,6 @@ public class LauncherActivity extends AppCompatActivity {
 
         sidebar.setOnTouchListener((v, event) -> {
             if (isVaultSearchActive) return false;
-
             int action = event.getAction();
             if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
                 float y = Math.max(0, Math.min(event.getY(), v.getHeight() - 1));
@@ -783,7 +818,6 @@ public class LauncherActivity extends AppCompatActivity {
                 showVaultLetterBubble(LETTERS.charAt(index));
                 return true;
             }
-
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 if (vaultLastSelectedIndex >= 0) {
                     animateVaultLetterOut(vaultLastSelectedIndex);
@@ -831,28 +865,21 @@ public class LauncherActivity extends AppCompatActivity {
         if (vaultLetterBubble != null) vaultLetterBubble.setVisibility(View.GONE);
     }
 
-    // ── Gesture detection ─────────────────────────────────────────────────────
+    // ── Gesture ───────────────────────────────────────────────────────────────
 
     private void setupGesture() {
         gesture = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent e) { return true; }
-
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float vX, float vY) {
                 if (e1 == null || e2 == null) return false;
                 float dX = e2.getX() - e1.getX();
                 float dY = e2.getY() - e1.getY();
-
                 boolean horizontal = Math.abs(dX) > Math.abs(dY) * 1.5f;
                 boolean vertical = Math.abs(dY) > Math.abs(dX) * 1.5f;
-
                 if (vertical && dY < -100 && Math.abs(vY) > 300) {
-                    if (currentPage == PAGE_HOME) {
-                        openDrawer();
-                        return true;
-                    }
+                    if (currentPage == PAGE_HOME) { openDrawer(); return true; }
                 }
-
                 if (horizontal && Math.abs(dX) > 100 && Math.abs(vX) > 300) {
                     if (dX < 0) {
                         if (currentPage == PAGE_HOME) showPage(PAGE_WIDGETS);
@@ -971,8 +998,6 @@ public class LauncherActivity extends AppCompatActivity {
                 .setNegativeButton("Cancel", null).show();
     }
 
-    // ── PickerAdapter ─────────────────────────────────────────────────────────
-
     private static class PickerAdapter extends RecyclerView.Adapter<AppSearchAdapter.AppViewHolder> {
         interface OnPick { void onPicked(AppSearchActivity.AppEntry e); }
         private final android.content.Context ctx;
@@ -980,15 +1005,11 @@ public class LauncherActivity extends AppCompatActivity {
         private final OnPick pick;
 
         PickerAdapter(android.content.Context c, List<AppSearchActivity.AppEntry> i, OnPick p) {
-            ctx = c;
-            items = new ArrayList<>(i);
-            pick = p;
+            ctx = c; items = new ArrayList<>(i); pick = p;
         }
 
         void setItems(List<AppSearchActivity.AppEntry> u) {
-            items.clear();
-            items.addAll(u);
-            notifyDataSetChanged();
+            items.clear(); items.addAll(u); notifyDataSetChanged();
         }
 
         @Override public int getItemCount() { return items.size(); }
@@ -1088,10 +1109,6 @@ public class LauncherActivity extends AppCompatActivity {
             TelemetrySnapshot local = repo.collectLocalSnapshot(this);
             runOnUiThread(() -> renderMetrics(local));
         }).start();
-        repo.syncCurrentChild(this).addOnCompleteListener(t -> {
-            // Keep the home card on the local usage source so it stays aligned with
-            // the on-device screen-time view instead of being replaced by remote data.
-        });
     }
 
     private void renderMetrics(TelemetrySnapshot s) {
@@ -1115,7 +1132,6 @@ public class LauncherActivity extends AppCompatActivity {
                     st.setText(fmtMin(snap.dailyUsageMinutes[i]));
                 }
             }
-
             @Override public void onBarRelease() {
                 if (snap != null && snap.dailyUsageMinutes.length > 0) {
                     st.setText(fmtMin(snap.dailyUsageMinutes[snap.dailyUsageMinutes.length - 1]));
@@ -1130,13 +1146,11 @@ public class LauncherActivity extends AppCompatActivity {
     private void setupPageActions() {
         View openVault = findViewById(R.id.btnOpenVaultFromSwipe);
         if (openVault != null) {
-            openVault.setOnClickListener(v ->
-                    startActivity(new Intent(this, AppVaultActivity.class)));
+            openVault.setOnClickListener(v -> showPage(PAGE_VAULT));
         }
         View openQr = findViewById(R.id.btnOpenQrFromSwipe);
         if (openQr != null) {
-            openQr.setOnClickListener(v ->
-                    startActivity(new Intent(this, ChildQrActivity.class)));
+            openQr.setOnClickListener(v -> showPage(PAGE_QR));
         }
         View logout = findViewById(R.id.btnLogoutFromLauncher);
         if (logout != null) logout.setOnClickListener(v -> {
@@ -1153,12 +1167,8 @@ public class LauncherActivity extends AppCompatActivity {
             tvDate.setOnClickListener(v -> openCalendarApp());
             tvDate.setClickable(true);
         }
-        if (btnPhone != null) {
-            btnPhone.setOnClickListener(v -> openPhoneApp());
-        }
-        if (btnCamera != null) {
-            btnCamera.setOnClickListener(v -> openCameraApp());
-        }
+        if (btnPhone != null) btnPhone.setOnClickListener(v -> openPhoneApp());
+        if (btnCamera != null) btnCamera.setOnClickListener(v -> openCameraApp());
     }
 
     private void openCalendarApp() {
@@ -1168,8 +1178,7 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void openPhoneApp() {
-        launchBestEffortIntent(
-                new Intent(Intent.ACTION_DIAL));
+        launchBestEffortIntent(new Intent(Intent.ACTION_DIAL));
     }
 
     private void openCameraApp() {
@@ -1184,12 +1193,7 @@ public class LauncherActivity extends AppCompatActivity {
             if (intent == null) continue;
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             if (intent.resolveActivity(pm) != null) {
-                try {
-                    startActivity(intent);
-                    return;
-                } catch (ActivityNotFoundException ignored) {
-                    // Try the next fallback.
-                }
+                try { startActivity(intent); return; } catch (ActivityNotFoundException ignored) {}
             }
         }
         Toast.makeText(this, "No app found", Toast.LENGTH_SHORT).show();
@@ -1214,16 +1218,8 @@ public class LauncherActivity extends AppCompatActivity {
 
     private void bindLinkedParent() {
         TextView tv = findViewById(R.id.tvLinkedParentStatus);
-        FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
-        if (u == null) {
-            tv.setText("Linked parent: none");
-            return;
-        }
-        profileStore.getLinkedParentUid(u).addOnCompleteListener(t -> {
-            String p = t.isSuccessful() ? t.getResult() : null;
-            tv.setText((p == null || p.trim().isEmpty()) ? "Linked parent: none"
-                    : "Linked parent: " + p.substring(0, Math.min(6, p.length())));
-        });
+        // Firestore linking logic removed, showing locally linked status if any.
+        tv.setText("Linked parent: LOCAL_ONLY");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1255,16 +1251,11 @@ public class LauncherActivity extends AppCompatActivity {
         }
     }
 
-    private int dpToPx(int dp) {
-        return Math.round(dp * getResources().getDisplayMetrics().density);
-    }
-
+    private int dpToPx(int dp) { return Math.round(dp * getResources().getDisplayMetrics().density); }
     private String fmtMin(long m) { return (m / 60) + "h " + (m % 60) + "m"; }
-
     private float[] norm(long[] v) {
         if (v == null || v.length == 0) return new float[]{.2f, .2f, .2f, .2f, .2f, .2f, .2f};
-        long mx = 1;
-        for (long x : v) if (x > mx) mx = x;
+        long mx = 1; for (long x : v) if (x > mx) mx = x;
         float[] o = new float[v.length];
         for (int i = 0; i < v.length; i++) o[i] = Math.max(.1f, Math.min(1f, (float) v[i] / mx));
         return o;
