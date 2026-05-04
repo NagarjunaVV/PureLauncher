@@ -15,6 +15,8 @@ public class CircularCounterView extends View {
     private final Paint arcPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF arcRect = new RectF();
 
+    private float progress = 0f; // 0 to 1
+
     public CircularCounterView(Context context) {
         super(context);
         init();
@@ -41,6 +43,11 @@ public class CircularCounterView extends View {
         arcPaint.setColor(0xFFFFFFFF);
     }
 
+    public void setProgress(float progress) {
+        this.progress = Math.max(0f, Math.min(1f, progress));
+        invalidate();
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -49,6 +56,6 @@ public class CircularCounterView extends View {
         arcRect.set(inset, inset, getWidth() - inset, getHeight() - inset);
 
         canvas.drawArc(arcRect, 0f, 360f, false, trackPaint);
-        canvas.drawArc(arcRect, -90f, 252f, false, arcPaint);
+        canvas.drawArc(arcRect, -90f, 360f * progress, false, arcPaint);
     }
 }

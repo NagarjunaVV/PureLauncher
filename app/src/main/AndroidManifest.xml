@@ -56,6 +56,9 @@
             android:name=".DialogFrictionGateActivity"
             android:exported="false" />
         <activity
+            android:name=".LimitReachedActivity"
+            android:exported="false" />
+        <activity
             android:name=".ChildQrActivity"
             android:exported="false" />
         <activity

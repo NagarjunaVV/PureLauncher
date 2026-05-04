@@ -27,6 +27,9 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.TimePicker;
+import android.widget.Button;
+import android.widget.RadioGroup;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -36,6 +39,7 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.purelauncher.ui.views.BarChartView;
@@ -551,12 +555,10 @@ public class LauncherActivity extends AppCompatActivity {
             vaultRecycler.setLayoutManager(vaultLayoutManager);
             vaultAdapter = new AppSearchAdapter(this, new ArrayList<>());
             vaultAdapter.setOnAppClickListener(app -> {
-                Intent launchIntent = getPackageManager().getLaunchIntentForPackage(app.packageName);
-                if (launchIntent != null) {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-                    startActivity(launchIntent);
-                }
+                Intent intent = new Intent(this, DialogFrictionGateActivity.class);
+                intent.putExtra("packageName", app.packageName);
+                intent.putExtra("appName", app.label);
+                startActivity(intent);
             });
             vaultAdapter.setOnAppLongClickListener(this::showVaultAppOptions);
             vaultRecycler.setAdapter(vaultAdapter);
@@ -640,28 +642,91 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void showVaultAppOptions(AppSearchActivity.AppEntry app) {
-        String[] options = {"Remove from Vault", "App info", "Uninstall"};
+        String[] options = {"Change Friction", "Add App Limit", "Remove from Vault"};
         new AlertDialog.Builder(this, R.style.DarkDialog)
                 .setTitle(app.label)
                 .setItems(options, (dialog, which) -> {
                     switch (which) {
-                        case 0:
+                        case 0: // Change Friction
+                            showFrictionPicker(app);
+                            break;
+                        case 1: // Add App Limit
+                            showLimitPicker(app);
+                            break;
+                        case 2: // Remove from Vault
                             VaultPrefs.removeVaultedPackage(this, app.packageName);
                             drawerSidebarBuilt = false;
                             reloadDrawerApps();
                             refreshVaultPage();
                             break;
-                        case 1:
-                            startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                    Uri.parse("package:" + app.packageName)));
-                            break;
-                        case 2:
-                            startActivity(new Intent(Intent.ACTION_DELETE,
-                                    Uri.parse("package:" + app.packageName)));
-                            break;
                     }
                 })
                 .show();
+    }
+
+    private void showFrictionPicker(AppSearchActivity.AppEntry app) {
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_friction_picker, null);
+        RadioGroup rg = view.findViewById(R.id.rgFriction);
+        int currentType = VaultPrefs.getFrictionType(this, app.packageName);
+        if (currentType == VaultPrefs.FRICTION_PLUS_ONE) rg.check(R.id.rbPlusOne);
+        else if (currentType == VaultPrefs.FRICTION_X2) rg.check(R.id.rb2x);
+        else if (currentType == VaultPrefs.FRICTION_X3) rg.check(R.id.rb3x);
+
+        BottomSheetDialog drawer = new BottomSheetDialog(this, R.style.DarkDialog);
+        drawer.setContentView(view);
+        
+        Button btnCancel = view.findViewById(R.id.btnCancel);
+        Button btnOkay = view.findViewById(R.id.btnOkay);
+        
+        if (btnCancel != null) btnCancel.setOnClickListener(v -> drawer.dismiss());
+        if (btnOkay != null) btnOkay.setOnClickListener(v -> {
+            int type = VaultPrefs.FRICTION_PLUS_ONE;
+            int checkedId = rg.getCheckedRadioButtonId();
+            if (checkedId == R.id.rb2x) type = VaultPrefs.FRICTION_X2;
+            else if (checkedId == R.id.rb3x) type = VaultPrefs.FRICTION_X3;
+            
+            VaultPrefs.setFrictionType(this, app.packageName, type);
+            Toast.makeText(this, "Friction set for " + app.label, Toast.LENGTH_SHORT).show();
+            drawer.dismiss();
+        });
+        
+        drawer.show();
+    }
+
+    private void showLimitPicker(AppSearchActivity.AppEntry app) {
+        if (!VaultPrefs.canChangeLimitToday(this, app.packageName)) {
+            new AlertDialog.Builder(this, R.style.DarkDialog)
+                    .setTitle("Limit already set")
+                    .setMessage("App limit can only be changed once a day. Please try again tomorrow.")
+                    .setPositiveButton("OK", null)
+                    .show();
+            return;
+        }
+
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_limit_picker, null);
+        TimePicker tp = view.findViewById(R.id.timePicker);
+        tp.setIs24HourView(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            tp.setHour(0);
+            tp.setMinute(0);
+        }
+
+        BottomSheetDialog drawer = new BottomSheetDialog(this, R.style.DarkDialog);
+        drawer.setContentView(view);
+        
+        Button btnCancel = view.findViewById(R.id.btnCancel);
+        Button btnOkay = view.findViewById(R.id.btnOkay);
+        
+        if (btnCancel != null) btnCancel.setOnClickListener(v -> drawer.dismiss());
+        if (btnOkay != null) btnOkay.setOnClickListener(v -> {
+            int h = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? tp.getHour() : tp.getCurrentHour();
+            int m = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? tp.getMinute() : tp.getCurrentMinute();
+            VaultPrefs.setAppLimitMinutes(this, app.packageName, h * 60 + m);
+            Toast.makeText(this, "Limit set to " + h + "h " + m + "m", Toast.LENGTH_SHORT).show();
+            drawer.dismiss();
+        });
+        
+        drawer.show();
     }
 
     private void buildVaultLetterSidebar() {
