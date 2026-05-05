@@ -1,7 +1,6 @@
 package com.example.purelauncher;
 
 import android.os.Bundle;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -35,11 +34,13 @@ public class ChildQrActivity extends AppCompatActivity {
             return insets;
         });
 
-        TextView tokenView = findViewById(R.id.tvQrTokenValue);
+        TextView statusView = findViewById(R.id.tvQrStatus);
         ImageView qrPreview = findViewById(R.id.ivQrPreview);
 
         if (!NetworkUtils.isOnline(this)) {
-            tokenView.setText("No internet connection");
+            if (statusView != null) {
+                statusView.setText("No internet connection");
+            }
             qrPreview.setImageDrawable(null);
         } else {
             FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
@@ -57,22 +58,24 @@ public class ChildQrActivity extends AppCompatActivity {
                     .set(payload)
                     .addOnSuccessListener(unused -> {
                         String pairingPayload = QrCodeUtils.buildPairingPayload(uid, dynamicToken);
-                        tokenView.setText(dynamicToken);
+                        if (statusView != null) {
+                            statusView.setText("Ready to scan");
+                        }
                         try {
                             qrPreview.setImageBitmap(QrCodeUtils.generateQrBitmap(pairingPayload, 600));
                         } catch (WriterException e) {
                             qrPreview.setImageDrawable(null);
-                            tokenView.setText("QR unavailable");
+                            if (statusView != null) {
+                                statusView.setText("QR unavailable");
+                            }
                         }
                     })
                     .addOnFailureListener(error -> {
                         qrPreview.setImageDrawable(null);
-                        tokenView.setText("Failed to load QR");
+                        if (statusView != null) {
+                            statusView.setText("Failed to load QR");
+                        }
                     });
         }
-
-        Button backHome = findViewById(R.id.btnBackHome);
-        backHome.setOnClickListener(v -> finish());
-
     }
 }

@@ -1057,22 +1057,31 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void showLogoutDialog() {
-        new AlertDialog.Builder(this, R.style.DarkDialog)
-                .setTitle("Log out")
-                .setMessage(
-                        "After logging out, switch the default home app back to your device launcher in system Home settings. Continue?")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Accept", (dialog, which) -> {
-                    FirebaseAuth.getInstance().signOut();
-                    SessionPrefs.setChildAuthComplete(this, false);
-                    SessionPrefs.setPersonalPermissionsComplete(this, false);
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_logout, null);
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
 
-                    Intent roleSelection = new Intent(this, OnboardingActivity.class);
-                    roleSelection.putExtra("forceRoleSelection", true);
-                    startActivity(roleSelection);
-                    finishAffinity();
-                })
-                .show();
+        Button btnCancel = view.findViewById(R.id.btnCancel);
+        Button btnAccept = view.findViewById(R.id.btnAccept);
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+        if (btnAccept != null) {
+            btnAccept.setOnClickListener(v -> {
+                FirebaseAuth.getInstance().signOut();
+                SessionPrefs.setChildAuthComplete(this, false);
+                SessionPrefs.setPersonalPermissionsComplete(this, false);
+
+                Intent roleSelection = new Intent(this, OnboardingActivity.class);
+                roleSelection.putExtra("forceRoleSelection", true);
+                startActivity(roleSelection);
+                finishAffinity();
+            });
+        }
+
+        dialog.show();
     }
 
     // ── Bottom nav ────────────────────────────────────────────────────────────
