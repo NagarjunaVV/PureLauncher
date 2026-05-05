@@ -269,7 +269,7 @@ public class AppSearchActivity extends AppCompatActivity {
     private void showAppOptions(AppEntry app) {
         boolean vaulted = VaultPrefs.getVaultedPackages(this).contains(app.packageName);
         String vaultLabel = vaulted ? "Remove from Vault" : "Add to Vault";
-        String[] options = {vaultLabel, "App info", "Uninstall"};
+        String[] options = {vaultLabel, "App info"};
 
         new AlertDialog.Builder(this, R.style.DarkDialog)
                 .setTitle(app.label)
@@ -286,17 +286,6 @@ public class AppSearchActivity extends AppCompatActivity {
                         case 1: // App info
                             startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                     Uri.parse("package:" + app.packageName)));
-                            break;
-                        case 2: // Uninstall
-                            Intent uninstallIntent = new Intent(Intent.ACTION_DELETE);
-                            uninstallIntent.setData(Uri.fromParts("package", app.packageName, null));
-                            uninstallIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            try {
-                                startActivity(uninstallIntent);
-                            } catch (android.content.ActivityNotFoundException ignored) {
-                                startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                        Uri.fromParts("package", app.packageName, null)));
-                            }
                             break;
                     }
                 })

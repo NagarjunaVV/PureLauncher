@@ -14,18 +14,22 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:orientation="vertical"
             android:padding="24dp"
-            android:gravity="center">
+            android:gravity="center_horizontal">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <ImageView
                 android:layout_width="120dp"
                 android:layout_height="120dp"
                 android:src="@drawable/ic_lock"
                 app:tint="@color/text_secondary"
-                android:alpha="0.4"
-                android:layout_marginTop="80dp" />
+                android:alpha="0.4" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -54,7 +58,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="60dp"
+                android:layout_marginBottom="92dp"
                 android:padding="16dp"
                 android:background="@drawable/bg_chip_dark"
                 android:text="Swipe up and long press any app\nto 'Add to Vault'"

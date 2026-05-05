@@ -32,6 +32,8 @@ public class AppUsageGuardService extends Service {
     private String activePackage = "";
     private long activePackageStartedAt = 0L;
     private String currentBlockPackage = "";
+    private String scheduledLimitPackage = "";
+    private long scheduledLimitAt = 0L;
     
     private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
         @Override
@@ -61,6 +63,14 @@ public class AppUsageGuardService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         handler.removeCallbacks(monitorRunnable);
+        if (intent != null && intent.hasExtra("watchPackage")) {
+            String watchPackage = intent.getStringExtra("watchPackage");
+            if (watchPackage != null && !watchPackage.trim().isEmpty()) {
+                activePackage = watchPackage;
+                activePackageStartedAt = System.currentTimeMillis();
+                scheduleLimitBlockIfNeeded(watchPackage);
+            }
+        }
         handler.post(monitorRunnable);
         return START_STICKY;
     }
@@ -91,6 +101,7 @@ public class AppUsageGuardService extends Service {
             int limitMinutes = VaultPrefs.getAppLimitMinutes(this, topPackage);
             if (limitMinutes > 0) {
                 long currentMs = getLiveUsageMs(topPackage);
+                scheduleLimitBlockIfNeeded(topPackage);
                 if (currentMs >= limitMinutes * 60_000L) {
                     blockApp(topPackage);
                     return; // Don't check friction if blocked
@@ -129,10 +140,39 @@ public class AppUsageGuardService extends Service {
         startActivity(intent);
     }
 
+    private void scheduleLimitBlockIfNeeded(String packageName) {
+        int limitMinutes = VaultPrefs.getAppLimitMinutes(this, packageName);
+        if (limitMinutes <= 0) return;
+        long remainingMs = limitMinutes * 60_000L - getLiveUsageMs(packageName);
+        if (remainingMs <= 0L) {
+            blockApp(packageName);
+            return;
+        }
+        long targetAt = System.currentTimeMillis() + Math.min(remainingMs, 60_000L);
+        if (packageName.equals(scheduledLimitPackage) && scheduledLimitAt > System.currentTimeMillis()) {
+            return;
+        }
+        scheduledLimitPackage = packageName;
+        scheduledLimitAt = targetAt;
+        handler.postDelayed(() -> {
+            scheduledLimitPackage = "";
+            scheduledLimitAt = 0L;
+            String topPackage = getTopPackageName();
+            boolean stillActive = packageName.equals(topPackage)
+                    || (topPackage == null && packageName.equals(activePackage))
+                    || (getPackageName().equals(topPackage) && packageName.equals(activePackage));
+            if (stillActive
+                    && VaultPrefs.getAppLimitMinutes(this, packageName) > 0
+                    && getLiveUsageMs(packageName) >= VaultPrefs.getAppLimitMinutes(this, packageName) * 60_000L) {
+                blockApp(packageName);
+            }
+        }, Math.min(remainingMs, 60_000L));
+    }
+
     private String getTopPackageName() {
         UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
         long now = System.currentTimeMillis();
-        UsageEvents events = usm.queryEvents(now - 10_000L, now);
+        UsageEvents events = usm.queryEvents(now - 60_000L, now);
         String lastResumedPackage = null;
         long lastResumedAt = 0L;
         if (events != null) {
@@ -150,7 +190,7 @@ public class AppUsageGuardService extends Service {
             return lastResumedPackage;
         }
         // Look back 10 seconds to find usage events
-        List<UsageStats> stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 1000 * 10, now);
+        List<UsageStats> stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 60_000L, now);
         if (stats != null && !stats.isEmpty()) {
             SortedMap<Long, UsageStats> sortedStats = new TreeMap<>();
             for (UsageStats s : stats) {

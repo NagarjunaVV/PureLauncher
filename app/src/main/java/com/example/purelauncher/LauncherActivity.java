@@ -60,6 +60,12 @@ public class LauncherActivity extends AppCompatActivity {
     private final Runnable tick = new Runnable() {
         @Override public void run() { bindDateTime(); scheduleNextClockTick(); }
     };
+    private final Runnable metricsTick = new Runnable() {
+        @Override public void run() {
+            bindMetrics();
+            clock.postDelayed(this, 5_000L);
+        }
+    };
 
     private final TelemetryRepository repo = new TelemetryRepository();
     // profileStore kept for auth state routing but cloud sync features removed
@@ -72,6 +78,7 @@ public class LauncherActivity extends AppCompatActivity {
     private float swipeStartY = -1;
     private boolean isSwipingUp = false;
     private boolean drawerSidebarBuilt = false;
+    private boolean metricsLoading = false;
 
     private View pageHome, pageWidgets, pageVault, pageQr;
     private View appDrawerSheet;
@@ -176,6 +183,7 @@ public class LauncherActivity extends AppCompatActivity {
             return;
         }
         startClockUpdates();
+        startMetricsUpdates();
         blockNotificationShade();
         reloadDrawerApps();
         refreshVaultPage();
@@ -198,6 +206,7 @@ public class LauncherActivity extends AppCompatActivity {
     @Override protected void onPause() {
         super.onPause();
         clock.removeCallbacks(tick);
+        clock.removeCallbacks(metricsTick);
     }
 
     @Override
@@ -520,8 +529,6 @@ public class LauncherActivity extends AppCompatActivity {
         menuView.findViewById(R.id.btnAppLimit).setVisibility(vaultToolsVisibility);
         menuView.findViewById(R.id.divAppInfoTop).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
         menuView.findViewById(R.id.btnAppInfo).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
-        menuView.findViewById(R.id.divUninstallTop).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
-        menuView.findViewById(R.id.btnUninstall).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
 
         menuView.findViewById(R.id.btnToggleVault).setOnClickListener(v -> {
             if (inVault) VaultPrefs.removeVaultedPackage(this, app.packageName);
@@ -529,17 +536,13 @@ public class LauncherActivity extends AppCompatActivity {
             drawerSidebarBuilt = false;
             reloadDrawerApps();
             refreshVaultPage();
+            bindMetrics();
             dismissContextMenuOverlay();
         });
 
         menuView.findViewById(R.id.btnAppInfo).setOnClickListener(v -> {
             startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.parse("package:" + app.packageName)));
-            dismissContextMenuOverlay();
-        });
-
-        menuView.findViewById(R.id.btnUninstall).setOnClickListener(v -> {
-            openUninstall(app);
             dismissContextMenuOverlay();
         });
 
@@ -579,19 +582,6 @@ public class LauncherActivity extends AppCompatActivity {
                     ((ViewGroup) overlay.getParent()).removeView(overlay);
                 }
             }).start();
-        }
-    }
-
-    private void openUninstall(AppSearchActivity.AppEntry app) {
-        Intent intent = new Intent(Intent.ACTION_DELETE);
-        intent.setData(Uri.fromParts("package", app.packageName, null));
-        intent.putExtra(Intent.EXTRA_RETURN_RESULT, false);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try {
-            startActivity(intent);
-        } catch (ActivityNotFoundException ignored) {
-            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:" + app.packageName)));
         }
     }
 
@@ -653,6 +643,7 @@ public class LauncherActivity extends AppCompatActivity {
         isVaultSearchActive = !q.trim().isEmpty();
         filterVaultApps(q);
         buildVaultLetterSidebar();
+        bindMetrics();
     }
 
     private void filterVaultApps(String query) {
@@ -1052,6 +1043,21 @@ public class LauncherActivity extends AppCompatActivity {
         navHome.setVisibility(navExpanded || currentPage == PAGE_HOME ? View.VISIBLE : View.GONE);
         navVault.setVisibility(navExpanded || currentPage == PAGE_VAULT ? View.VISIBLE : View.GONE);
         navQr.setVisibility(navExpanded || currentPage == PAGE_QR ? View.VISIBLE : View.GONE);
+        alignNavIconMargins();
+    }
+
+    private void alignNavIconMargins() {
+        boolean seenVisible = false;
+        ImageView[] icons = new ImageView[]{navHome, navVault, navQr};
+        for (ImageView icon : icons) {
+            if (icon == null) continue;
+            ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) icon.getLayoutParams();
+            lp.setMarginStart(seenVisible ? dpToPx(16) : 0);
+            icon.setLayoutParams(lp);
+            if (icon.getVisibility() == View.VISIBLE) {
+                seenVisible = true;
+            }
+        }
     }
 
     // ── Pages ─────────────────────────────────────────────────────────────────
@@ -1105,9 +1111,14 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void bindMetrics() {
+        if (metricsLoading) return;
+        metricsLoading = true;
         new Thread(() -> {
             TelemetrySnapshot local = repo.collectLocalSnapshot(this);
-            runOnUiThread(() -> renderMetrics(local));
+            runOnUiThread(() -> {
+                metricsLoading = false;
+                renderMetrics(local);
+            });
         }).start();
     }
 
@@ -1141,6 +1152,20 @@ public class LauncherActivity extends AppCompatActivity {
 
         View stats = cardStats != null ? cardStats : findViewById(R.id.cardStats);
         stats.setOnClickListener(v -> startActivity(new Intent(this, ScreenTimeActivity.class)));
+        View reload = findViewById(R.id.btnReloadStats);
+        if (reload != null) {
+            reload.setOnClickListener(v -> {
+                metricsLoading = false;
+                bindMetrics();
+                v.animate().rotationBy(360f).setDuration(350).start();
+            });
+        }
+    }
+
+    private void startMetricsUpdates() {
+        clock.removeCallbacks(metricsTick);
+        bindMetrics();
+        clock.postDelayed(metricsTick, 5_000L);
     }
 
     private void setupPageActions() {

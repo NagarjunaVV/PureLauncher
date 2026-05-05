@@ -95,19 +95,15 @@
                             android:textStyle="bold" />
                     </LinearLayout>
 
-                    <TextView
-                        android:id="@+id/tvDelta"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_chip_dark"
-                        android:paddingStart="12dp"
-                        android:paddingTop="6dp"
-                        android:paddingEnd="12dp"
-                        android:paddingBottom="6dp"
-                        android:text="0 notifications"
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp"
-                        android:visibility="gone" />
+                    <ImageButton
+                        android:id="@+id/btnReloadStats"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_black"
+                        android:contentDescription="Reload screen time"
+                        android:padding="10dp"
+                        android:src="@drawable/ic_refresh"
+                        android:tint="@color/text_primary" />
                 </LinearLayout>
 
                 <com.purelauncher.ui.views.BarChartView

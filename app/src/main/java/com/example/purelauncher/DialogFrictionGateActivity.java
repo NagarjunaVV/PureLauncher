@@ -142,6 +142,9 @@ public class DialogFrictionGateActivity extends AppCompatActivity {
     private void launchApp() {
         VaultPrefs.incrementDailyClicks(this, packageName);
         VaultPrefs.setLastUnlockedPkg(this, packageName);
+        Intent guardIntent = new Intent(this, AppUsageGuardService.class);
+        guardIntent.putExtra("watchPackage", packageName);
+        startService(guardIntent);
         Intent launchIntent = getPackageManager().getLaunchIntentForPackage(packageName);
         if (launchIntent != null) {
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
