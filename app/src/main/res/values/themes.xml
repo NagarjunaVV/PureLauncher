@@ -23,7 +23,7 @@
         <item name="android:taskToFrontExitAnimation">@null</item>
     </style>
 
-    <!-- Dark AlertDialog for widget picker and remove confirmation -->
+    <!-- Dark AlertDialog style for launcher dialogs -->
     <style name="DarkDialog" parent="Theme.MaterialComponents.Dialog.Alert">
         <item name="android:background">#111111</item>
         <item name="android:textColor">#FFFFFF</item>

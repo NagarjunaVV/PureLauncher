@@ -14,6 +14,12 @@ import androidx.core.view.WindowInsetsCompat;
 import com.google.zxing.WriterException;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class ChildQrActivity extends AppCompatActivity {
 
@@ -29,19 +35,40 @@ public class ChildQrActivity extends AppCompatActivity {
             return insets;
         });
 
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        String uid = user == null ? "child" : user.getUid();
-        String pairingPayload = QrCodeUtils.buildPairingPayload(uid);
-
         TextView tokenView = findViewById(R.id.tvQrTokenValue);
-        tokenView.setText(uid);
-
         ImageView qrPreview = findViewById(R.id.ivQrPreview);
-        try {
-            qrPreview.setImageBitmap(QrCodeUtils.generateQrBitmap(pairingPayload, 600));
-        } catch (WriterException e) {
+
+        if (!NetworkUtils.isOnline(this)) {
+            tokenView.setText("No internet connection");
             qrPreview.setImageDrawable(null);
-            tokenView.setText(uid + "\nQR unavailable");
+        } else {
+            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            String uid = user == null ? "child" : user.getUid();
+            String dynamicToken = UUID.randomUUID().toString();
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("uid", uid);
+            payload.put("token", dynamicToken);
+            payload.put("updatedAt", FieldValue.serverTimestamp());
+
+            FirebaseFirestore.getInstance()
+                    .collection("child_link_tokens")
+                    .document(uid)
+                    .set(payload)
+                    .addOnSuccessListener(unused -> {
+                        String pairingPayload = QrCodeUtils.buildPairingPayload(uid, dynamicToken);
+                        tokenView.setText(dynamicToken);
+                        try {
+                            qrPreview.setImageBitmap(QrCodeUtils.generateQrBitmap(pairingPayload, 600));
+                        } catch (WriterException e) {
+                            qrPreview.setImageDrawable(null);
+                            tokenView.setText("QR unavailable");
+                        }
+                    })
+                    .addOnFailureListener(error -> {
+                        qrPreview.setImageDrawable(null);
+                        tokenView.setText("Failed to load QR");
+                    });
         }
 
         Button backHome = findViewById(R.id.btnBackHome);

@@ -25,6 +25,15 @@ final class QrCodeUtils {
         return PAIRING_PREFIX + childUid.trim();
     }
 
+    static String buildPairingPayload(String childUid, String nonce) {
+        String trimmedUid = childUid == null ? "" : childUid.trim();
+        String trimmedNonce = nonce == null ? "" : nonce.trim();
+        if (trimmedNonce.isEmpty()) {
+            return buildPairingPayload(trimmedUid);
+        }
+        return PAIRING_PREFIX + trimmedUid + "|" + trimmedNonce;
+    }
+
     static String extractChildUid(String rawText) {
         if (rawText == null) {
             return null;
@@ -34,7 +43,12 @@ final class QrCodeUtils {
             return null;
         }
         if (trimmed.startsWith(PAIRING_PREFIX)) {
-            return trimmed.substring(PAIRING_PREFIX.length()).trim();
+            String payload = trimmed.substring(PAIRING_PREFIX.length()).trim();
+            int separator = payload.indexOf('|');
+            if (separator > -1) {
+                return payload.substring(0, separator).trim();
+            }
+            return payload;
         }
         return trimmed;
     }
@@ -52,8 +66,7 @@ final class QrCodeUtils {
 
     static String decodeQrBitmap(Bitmap bitmap) throws ReaderException {
         Result result = new MultiFormatReader().decode(
-                new BinaryBitmap(new HybridBinarizer(new BitmapLuminanceSource(bitmap)))
-        );
+                new BinaryBitmap(new HybridBinarizer(new BitmapLuminanceSource(bitmap))));
         return result == null ? null : result.getText();
     }
 

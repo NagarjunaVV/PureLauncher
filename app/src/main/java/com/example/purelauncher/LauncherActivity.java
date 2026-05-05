@@ -13,7 +13,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
-import android.view.GestureDetector;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -34,7 +33,6 @@ import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
-import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -52,16 +50,21 @@ import java.util.Set;
 
 public class LauncherActivity extends AppCompatActivity {
 
-    private static final int PAGE_HOME = 0, PAGE_WIDGETS = 1, PAGE_VAULT = 2, PAGE_QR = 3;
+    private static final int PAGE_HOME = 0, PAGE_VAULT = 1, PAGE_SETTINGS = 2;
 
     private final SimpleDateFormat timeFmt = new SimpleDateFormat("h:mm", Locale.getDefault());
     private final SimpleDateFormat dateFmt = new SimpleDateFormat("EEEE, MMM d", Locale.getDefault());
     private final Handler clock = new Handler(Looper.getMainLooper());
     private final Runnable tick = new Runnable() {
-        @Override public void run() { bindDateTime(); scheduleNextClockTick(); }
+        @Override
+        public void run() {
+            bindDateTime();
+            scheduleNextClockTick();
+        }
     };
     private final Runnable metricsTick = new Runnable() {
-        @Override public void run() {
+        @Override
+        public void run() {
             bindMetrics();
             clock.postDelayed(this, 5_000L);
         }
@@ -80,11 +83,9 @@ public class LauncherActivity extends AppCompatActivity {
     private boolean drawerSidebarBuilt = false;
     private boolean metricsLoading = false;
 
-    private View pageHome, pageWidgets, pageVault, pageQr;
+    private View pageHome, pageVault, pageSettings;
     private View appDrawerSheet;
-    private ImageView navHome, navVault, navQr;
-    private View cardWidgetHint;
-    private GestureDetector gesture;
+    private ImageView navHome, navVault, navSettings;
     private TextView tvTime;
     private TextView tvDate;
     private TextView tvHeadline;
@@ -93,7 +94,6 @@ public class LauncherActivity extends AppCompatActivity {
     private View cardStats;
     private boolean askedHomeRole = false;
 
-    private WidgetsAdapter widgetsAdapter;
     private AppSearchAdapter drawerAdapter;
     private final List<AppSearchActivity.AppEntry> allApps = new ArrayList<>();
     private final List<AppSearchActivity.AppEntry> vaultApps = new ArrayList<>();
@@ -114,6 +114,7 @@ public class LauncherActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        LauncherUiPrefs.applyTheme(this);
 
         FirebaseUser u = FirebaseAuth.getInstance().getCurrentUser();
         if (u == null || !SessionPrefs.isChildAuthComplete(this)) {
@@ -136,27 +137,24 @@ public class LauncherActivity extends AppCompatActivity {
         screenH = dm.heightPixels;
 
         pageHome = findViewById(R.id.pageHome);
-        pageWidgets = findViewById(R.id.pageWidgets);
         pageVault = findViewById(R.id.pageVault);
-        pageQr = findViewById(R.id.pageQr);
+        pageSettings = findViewById(R.id.pageSettings);
         appDrawerSheet = findViewById(R.id.appDrawerSheet);
         navHome = findViewById(R.id.navHome);
         navVault = findViewById(R.id.navVault);
-        navQr = findViewById(R.id.navQr);
+        navSettings = findViewById(R.id.navSettings);
         tvTime = findViewById(R.id.tvTime);
         tvDate = findViewById(R.id.tvDate);
         tvHeadline = findViewById(R.id.tvHeadline);
         btnPhone = findViewById(R.id.btnOpenPhone);
         btnCamera = findViewById(R.id.btnOpenCamera);
         cardStats = findViewById(R.id.cardStats);
-        cardWidgetHint = pageWidgets.findViewById(R.id.cardWidgetHint);
 
         appDrawerSheet.post(() -> appDrawerSheet.setTranslationY(screenH));
 
-        setupGesture();
         setupBottomNav();
         setupPageActions();
-        setupWidgets();
+        setupSettingsPage();
         setupDrawer();
         setupVaultPage();
         setupHomeShortcuts();
@@ -171,7 +169,8 @@ public class LauncherActivity extends AppCompatActivity {
         }
     }
 
-    @Override protected void onResume() {
+    @Override
+    protected void onResume() {
         super.onResume();
         if (SessionPrefs.getRole(this) == SessionPrefs.Role.CHILD
                 && !RequiredPermissions.allGranted(this)) {
@@ -203,7 +202,8 @@ public class LauncherActivity extends AppCompatActivity {
         }
     }
 
-    @Override protected void onPause() {
+    @Override
+    protected void onPause() {
         super.onPause();
         clock.removeCallbacks(tick);
         clock.removeCallbacks(metricsTick);
@@ -212,7 +212,8 @@ public class LauncherActivity extends AppCompatActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) blockNotificationShade();
+        if (hasFocus)
+            blockNotificationShade();
     }
 
     private void blockNotificationShade() {
@@ -223,15 +224,16 @@ public class LauncherActivity extends AppCompatActivity {
                         WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             }
         } else {
-            //noinspection deprecation
+            // noinspection deprecation
             getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
         }
     }
 
-    @Override public void onBackPressed() {
+    @Override
+    public void onBackPressed() {
         if (contextMenuOverlay != null) {
             dismissContextMenuOverlay();
             return;
@@ -245,11 +247,12 @@ public class LauncherActivity extends AppCompatActivity {
         }
     }
 
-    @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
         if (drawerOpen) {
             return super.dispatchTouchEvent(ev);
         }
-        
+
         switch (ev.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 swipeStartY = ev.getRawY();
@@ -268,8 +271,10 @@ public class LauncherActivity extends AppCompatActivity {
             case MotionEvent.ACTION_CANCEL:
                 if (isSwipingUp) {
                     float dy = swipeStartY - ev.getRawY();
-                    if (dy > screenH / 4) openDrawer();
-                    else closeDrawer();
+                    if (dy > screenH / 4)
+                        openDrawer();
+                    else
+                        closeDrawer();
                     swipeStartY = -1;
                     isSwipingUp = false;
                     return true;
@@ -278,7 +283,6 @@ public class LauncherActivity extends AppCompatActivity {
                 break;
         }
 
-        if (gesture != null && !isSwipingUp) gesture.onTouchEvent(ev);
         return super.dispatchTouchEvent(ev);
     }
 
@@ -312,7 +316,8 @@ public class LauncherActivity extends AppCompatActivity {
 
         EditText et = appDrawerSheet.findViewById(R.id.etSearchApps);
         et.addTextChangedListener(new SimpleTextWatcher() {
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
                 filterDrawer(s == null ? "" : s.toString());
             }
         });
@@ -327,7 +332,9 @@ public class LauncherActivity extends AppCompatActivity {
 
         appDrawerSheet.setOnTouchListener(new View.OnTouchListener() {
             float startY, initY;
-            @Override public boolean onTouch(View v, MotionEvent ev) {
+
+            @Override
+            public boolean onTouch(View v, MotionEvent ev) {
                 switch (ev.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         startY = ev.getRawY();
@@ -335,11 +342,14 @@ public class LauncherActivity extends AppCompatActivity {
                         break;
                     case MotionEvent.ACTION_MOVE:
                         float dy = ev.getRawY() - startY;
-                        if (dy > 0) v.setTranslationY(initY + dy);
+                        if (dy > 0)
+                            v.setTranslationY(initY + dy);
                         break;
                     case MotionEvent.ACTION_UP:
-                        if (ev.getRawY() - startY > 150) closeDrawer();
-                        else openDrawer();
+                        if (ev.getRawY() - startY > 150)
+                            closeDrawer();
+                        else
+                            openDrawer();
                         break;
                 }
                 return true;
@@ -351,7 +361,8 @@ public class LauncherActivity extends AppCompatActivity {
 
     private void buildDrawerLetterSidebar() {
         android.widget.LinearLayout sidebar = appDrawerSheet.findViewById(R.id.letterSidebar);
-        if (sidebar == null) return;
+        if (sidebar == null)
+            return;
         sidebar.removeAllViews();
         drawerLetterViews = new TextView[LETTERS.length()];
 
@@ -391,13 +402,15 @@ public class LauncherActivity extends AppCompatActivity {
                 index = Math.max(0, Math.min(LETTERS.length() - 1, index));
 
                 if (index != drawerLastSelectedIndex) {
-                    if (drawerLastSelectedIndex >= 0) animateDrawerLetterOut(drawerLastSelectedIndex);
+                    if (drawerLastSelectedIndex >= 0)
+                        animateDrawerLetterOut(drawerLastSelectedIndex);
                     drawerLastSelectedIndex = index;
                     animateDrawerLetterIn(index);
                 }
 
                 int pos = drawerAdapter.getPositionForLetter(LETTERS.charAt(index));
-                if (pos >= 0) drawerLayoutManager.scrollToPositionWithOffset(pos, 0);
+                if (pos >= 0)
+                    drawerLayoutManager.scrollToPositionWithOffset(pos, 0);
                 if (drawerLetterBubble != null) {
                     drawerLetterBubble.setText(String.valueOf(LETTERS.charAt(index)));
                     drawerLetterBubble.setVisibility(View.VISIBLE);
@@ -410,7 +423,8 @@ public class LauncherActivity extends AppCompatActivity {
                     animateDrawerLetterOut(drawerLastSelectedIndex);
                     drawerLastSelectedIndex = -1;
                 }
-                if (drawerLetterBubble != null) drawerLetterBubble.setVisibility(View.GONE);
+                if (drawerLetterBubble != null)
+                    drawerLetterBubble.setVisibility(View.GONE);
                 return true;
             }
             return false;
@@ -418,7 +432,8 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void animateDrawerLetterIn(int index) {
-        if (drawerLetterViews == null || index < 0 || index >= drawerLetterViews.length) return;
+        if (drawerLetterViews == null || index < 0 || index >= drawerLetterViews.length)
+            return;
         TextView tv = drawerLetterViews[index];
         tv.setTextColor(0xFFFFFFFF);
         android.graphics.drawable.GradientDrawable circle = new android.graphics.drawable.GradientDrawable();
@@ -429,7 +444,8 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void animateDrawerLetterOut(int index) {
-        if (drawerLetterViews == null || index < 0 || index >= drawerLetterViews.length) return;
+        if (drawerLetterViews == null || index < 0 || index >= drawerLetterViews.length)
+            return;
         TextView tv = drawerLetterViews[index];
         tv.setTextColor(drawerLetterHasApps[index] ? 0xFFCCCCCC : 0xFF444444);
         tv.setBackground(null);
@@ -463,7 +479,8 @@ public class LauncherActivity extends AppCompatActivity {
         }
         List<AppSearchActivity.AppEntry> f = new ArrayList<>();
         for (AppSearchActivity.AppEntry e : allApps) {
-            if (e.label.toLowerCase(Locale.getDefault()).contains(lq)) f.add(e);
+            if (e.label.toLowerCase(Locale.getDefault()).contains(lq))
+                f.add(e);
         }
         drawerAdapter.updateItems(f);
     }
@@ -490,7 +507,8 @@ public class LauncherActivity extends AppCompatActivity {
                 .withEndAction(() -> {
                     appDrawerSheet.setLayerType(View.LAYER_TYPE_NONE, null);
                     EditText et = appDrawerSheet.findViewById(R.id.etSearchApps);
-                    if (et != null) et.setText("");
+                    if (et != null)
+                        et.setText("");
                 })
                 .start();
         hideKeyboard();
@@ -532,8 +550,10 @@ public class LauncherActivity extends AppCompatActivity {
         menuView.findViewById(R.id.btnAppInfo).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
 
         menuView.findViewById(R.id.btnToggleVault).setOnClickListener(v -> {
-            if (inVault) VaultPrefs.removeVaultedPackage(this, app.packageName);
-            else VaultPrefs.addVaultedPackage(this, app.packageName);
+            if (inVault)
+                VaultPrefs.removeVaultedPackage(this, app.packageName);
+            else
+                VaultPrefs.addVaultedPackage(this, app.packageName);
             drawerSidebarBuilt = false;
             reloadDrawerApps();
             refreshVaultPage();
@@ -589,7 +609,8 @@ public class LauncherActivity extends AppCompatActivity {
     // ── Vault ─────────────────────────────────────────────────────────────────
 
     private void setupVaultPage() {
-        if (pageVault == null) return;
+        if (pageVault == null)
+            return;
 
         cardVaultEmpty = pageVault.findViewById(R.id.cardVaultEmpty);
         vaultListContainer = pageVault.findViewById(R.id.vaultListContainer);
@@ -612,7 +633,8 @@ public class LauncherActivity extends AppCompatActivity {
         EditText search = pageVault.findViewById(R.id.etVaultSearchApps);
         if (search != null) {
             search.addTextChangedListener(new SimpleTextWatcher() {
-                @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                @Override
+                public void onTextChanged(CharSequence s, int a, int b, int c) {
                     String q = s == null ? "" : s.toString();
                     isVaultSearchActive = !q.trim().isEmpty();
                     if (isVaultSearchActive && vaultLetterBubble != null) {
@@ -628,16 +650,20 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void refreshVaultPage() {
-        if (pageVault == null || vaultAdapter == null) return;
+        if (pageVault == null || vaultAdapter == null)
+            return;
 
         vaultApps.clear();
         vaultApps.addAll(loadVaultedApps());
 
         boolean hasApps = !vaultApps.isEmpty();
-        if (cardVaultEmpty != null) cardVaultEmpty.setVisibility(hasApps ? View.GONE : View.VISIBLE);
-        if (vaultListContainer != null) vaultListContainer.setVisibility(hasApps ? View.VISIBLE : View.GONE);
+        if (cardVaultEmpty != null)
+            cardVaultEmpty.setVisibility(hasApps ? View.GONE : View.VISIBLE);
+        if (vaultListContainer != null)
+            vaultListContainer.setVisibility(hasApps ? View.VISIBLE : View.GONE);
 
-        if (!hasApps) return;
+        if (!hasApps)
+            return;
 
         EditText search = pageVault.findViewById(R.id.etVaultSearchApps);
         String q = search == null ? "" : search.getText().toString();
@@ -648,7 +674,8 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void filterVaultApps(String query) {
-        if (vaultAdapter == null) return;
+        if (vaultAdapter == null)
+            return;
         String normalized = query == null ? "" : query.toLowerCase(Locale.getDefault()).trim();
         if (normalized.isEmpty()) {
             vaultAdapter.updateItems(vaultApps);
@@ -665,7 +692,8 @@ public class LauncherActivity extends AppCompatActivity {
 
     private List<AppSearchActivity.AppEntry> loadVaultedApps() {
         Set<String> vaulted = VaultPrefs.getVaultedPackages(this);
-        if (vaulted.isEmpty()) return new ArrayList<>();
+        if (vaulted.isEmpty())
+            return new ArrayList<>();
 
         PackageManager pm = getPackageManager();
         List<AppSearchActivity.AppEntry> items = new ArrayList<>();
@@ -682,7 +710,8 @@ public class LauncherActivity extends AppCompatActivity {
             }
         }
 
-        if (!cleaned.equals(vaulted)) VaultPrefs.setVaultedPackages(this, cleaned);
+        if (!cleaned.equals(vaulted))
+            VaultPrefs.setVaultedPackages(this, cleaned);
         items.sort((a, b) -> a.label.compareToIgnoreCase(b.label));
         return items;
     }
@@ -695,29 +724,36 @@ public class LauncherActivity extends AppCompatActivity {
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_friction_picker, null);
         RadioGroup rg = view.findViewById(R.id.rgFriction);
         int currentType = VaultPrefs.getFrictionType(this, app.packageName);
-        if (currentType == VaultPrefs.FRICTION_PLUS_ONE) rg.check(R.id.rbPlusOne);
-        else if (currentType == VaultPrefs.FRICTION_X2) rg.check(R.id.rb2x);
-        else if (currentType == VaultPrefs.FRICTION_X3) rg.check(R.id.rb3x);
+        if (currentType == VaultPrefs.FRICTION_PLUS_ONE)
+            rg.check(R.id.rbPlusOne);
+        else if (currentType == VaultPrefs.FRICTION_X2)
+            rg.check(R.id.rb2x);
+        else if (currentType == VaultPrefs.FRICTION_X3)
+            rg.check(R.id.rb3x);
 
         AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
                 .setView(view)
                 .create();
-        
+
         Button btnCancel = view.findViewById(R.id.btnCancel);
         Button btnOkay = view.findViewById(R.id.btnOkay);
-        
-        if (btnCancel != null) btnCancel.setOnClickListener(v -> dialog.dismiss());
-        if (btnOkay != null) btnOkay.setOnClickListener(v -> {
-            int type = VaultPrefs.FRICTION_PLUS_ONE;
-            int checkedId = rg.getCheckedRadioButtonId();
-            if (checkedId == R.id.rb2x) type = VaultPrefs.FRICTION_X2;
-            else if (checkedId == R.id.rb3x) type = VaultPrefs.FRICTION_X3;
-            
-            VaultPrefs.setFrictionType(this, app.packageName, type);
-            Toast.makeText(this, "Friction set for " + app.label, Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
-        });
-        
+
+        if (btnCancel != null)
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        if (btnOkay != null)
+            btnOkay.setOnClickListener(v -> {
+                int type = VaultPrefs.FRICTION_PLUS_ONE;
+                int checkedId = rg.getCheckedRadioButtonId();
+                if (checkedId == R.id.rb2x)
+                    type = VaultPrefs.FRICTION_X2;
+                else if (checkedId == R.id.rb3x)
+                    type = VaultPrefs.FRICTION_X3;
+
+                VaultPrefs.setFrictionType(this, app.packageName, type);
+                Toast.makeText(this, "Friction set for " + app.label, Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            });
+
         dialog.show();
     }
 
@@ -735,31 +771,35 @@ public class LauncherActivity extends AppCompatActivity {
         TimePicker tp = view.findViewById(R.id.timePicker);
         tp.setIs24HourView(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            tp.setHour(0); tp.setMinute(0);
+            tp.setHour(0);
+            tp.setMinute(0);
         }
 
         AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
                 .setView(view)
                 .create();
-        
+
         Button btnCancel = view.findViewById(R.id.btnCancel);
         Button btnOkay = view.findViewById(R.id.btnOkay);
-        
-        if (btnCancel != null) btnCancel.setOnClickListener(v -> dialog.dismiss());
-        if (btnOkay != null) btnOkay.setOnClickListener(v -> {
-            int h = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? tp.getHour() : tp.getCurrentHour();
-            int m = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? tp.getMinute() : tp.getCurrentMinute();
-            VaultPrefs.setAppLimitMinutes(this, app.packageName, h * 60 + m);
-            Toast.makeText(this, "Limit set to " + h + "h " + m + "m", Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
-        });
-        
+
+        if (btnCancel != null)
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        if (btnOkay != null)
+            btnOkay.setOnClickListener(v -> {
+                int h = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? tp.getHour() : tp.getCurrentHour();
+                int m = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? tp.getMinute() : tp.getCurrentMinute();
+                VaultPrefs.setAppLimitMinutes(this, app.packageName, h * 60 + m);
+                Toast.makeText(this, "Limit set to " + h + "h " + m + "m", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            });
+
         dialog.show();
     }
 
     private void buildVaultLetterSidebar() {
         android.widget.LinearLayout sidebar = pageVault.findViewById(R.id.vaultLetterSidebar);
-        if (sidebar == null) return;
+        if (sidebar == null)
+            return;
 
         sidebar.removeAllViews();
         vaultLetterViews = new TextView[LETTERS.length()];
@@ -793,7 +833,8 @@ public class LauncherActivity extends AppCompatActivity {
         }
 
         sidebar.setOnTouchListener((v, event) -> {
-            if (isVaultSearchActive) return false;
+            if (isVaultSearchActive)
+                return false;
             int action = event.getAction();
             if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
                 float y = Math.max(0, Math.min(event.getY(), v.getHeight() - 1));
@@ -801,7 +842,8 @@ public class LauncherActivity extends AppCompatActivity {
                 index = Math.max(0, Math.min(LETTERS.length() - 1, index));
 
                 if (index != vaultLastSelectedIndex) {
-                    if (vaultLastSelectedIndex >= 0) animateVaultLetterOut(vaultLastSelectedIndex);
+                    if (vaultLastSelectedIndex >= 0)
+                        animateVaultLetterOut(vaultLastSelectedIndex);
                     vaultLastSelectedIndex = index;
                     animateVaultLetterIn(index);
                 }
@@ -823,7 +865,8 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void animateVaultLetterIn(int index) {
-        if (vaultLetterViews == null || index < 0 || index >= vaultLetterViews.length) return;
+        if (vaultLetterViews == null || index < 0 || index >= vaultLetterViews.length)
+            return;
         TextView tv = vaultLetterViews[index];
         tv.setTextColor(0xFFFFFFFF);
         android.graphics.drawable.GradientDrawable circle = new android.graphics.drawable.GradientDrawable();
@@ -834,7 +877,8 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void animateVaultLetterOut(int index) {
-        if (vaultLetterViews == null || index < 0 || index >= vaultLetterViews.length) return;
+        if (vaultLetterViews == null || index < 0 || index >= vaultLetterViews.length)
+            return;
         TextView tv = vaultLetterViews[index];
         tv.setTextColor(vaultLetterHasApps[index] ? 0xFFCCCCCC : 0xFF444444);
         tv.setBackground(null);
@@ -842,180 +886,207 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void scrollVaultToLetter(char letter) {
-        if (vaultAdapter == null || vaultLayoutManager == null) return;
+        if (vaultAdapter == null || vaultLayoutManager == null)
+            return;
         int pos = vaultAdapter.getPositionForLetter(letter);
-        if (pos >= 0) vaultLayoutManager.scrollToPositionWithOffset(pos, 0);
+        if (pos >= 0)
+            vaultLayoutManager.scrollToPositionWithOffset(pos, 0);
     }
 
     private void showVaultLetterBubble(char letter) {
-        if (vaultLetterBubble == null) return;
+        if (vaultLetterBubble == null)
+            return;
         vaultLetterBubble.setText(String.valueOf(letter));
         vaultLetterBubble.setVisibility(View.VISIBLE);
     }
 
     private void hideVaultLetterBubble() {
-        if (vaultLetterBubble != null) vaultLetterBubble.setVisibility(View.GONE);
+        if (vaultLetterBubble != null)
+            vaultLetterBubble.setVisibility(View.GONE);
     }
 
-    // ── Gesture ───────────────────────────────────────────────────────────────
+    // ── Settings ──────────────────────────────────────────────────────────────
 
-    private void setupGesture() {
-        gesture = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
-            @Override public boolean onDown(MotionEvent e) { return true; }
-            @Override
-            public boolean onFling(MotionEvent e1, MotionEvent e2, float vX, float vY) {
-                if (e1 == null || e2 == null) return false;
-                float dX = e2.getX() - e1.getX();
-                float dY = e2.getY() - e1.getY();
-                boolean horizontal = Math.abs(dX) > Math.abs(dY) * 1.5f;
-                boolean vertical = Math.abs(dY) > Math.abs(dX) * 1.5f;
-                if (vertical && dY < -100 && Math.abs(vY) > 300) {
-                    if (currentPage == PAGE_HOME) { openDrawer(); return true; }
+    private void setupSettingsPage() {
+        updateSettingsSummaries();
+
+        View rowTheme = findViewById(R.id.rowTheme);
+        if (rowTheme != null)
+            rowTheme.setOnClickListener(v -> showThemePicker());
+
+        View rowFontSize = findViewById(R.id.rowFontSize);
+        if (rowFontSize != null)
+            rowFontSize.setOnClickListener(v -> showFontSizePicker());
+
+        View rowFont = findViewById(R.id.rowFont);
+        if (rowFont != null)
+            rowFont.setOnClickListener(v -> showFontPicker());
+
+        View rowLinkDevice = findViewById(R.id.rowLinkDevice);
+        if (rowLinkDevice != null) {
+            rowLinkDevice.setOnClickListener(v -> {
+                if (!NetworkUtils.isOnline(this)) {
+                    Toast.makeText(this, "No internet connection", Toast.LENGTH_SHORT).show();
+                    return;
                 }
-                if (horizontal && Math.abs(dX) > 100 && Math.abs(vX) > 300) {
-                    if (dX < 0) {
-                        if (currentPage == PAGE_HOME) showPage(PAGE_WIDGETS);
-                    } else {
-                        if (currentPage == PAGE_WIDGETS) showPage(PAGE_HOME);
-                    }
-                    return true;
-                }
-                return false;
-            }
-        });
+                startActivity(new Intent(this, ChildQrActivity.class));
+            });
+        }
+
+        View rowLogout = findViewById(R.id.rowLogout);
+        if (rowLogout != null)
+            rowLogout.setOnClickListener(v -> showLogoutDialog());
+
+        LauncherUiPrefs.applyTypography(findViewById(R.id.main), this);
     }
 
-    // ── Widgets ───────────────────────────────────────────────────────────────
-
-    private void setupWidgets() {
-        RecyclerView rv = pageWidgets.findViewById(R.id.rvWidgets);
-        rv.setLayoutManager(new GridLayoutManager(this, 2));
-        widgetsAdapter = new WidgetsAdapter(this, WidgetPrefs.getPackages(this),
-                new WidgetsAdapter.Callback() {
-                    @Override public void onAddClicked() { showWidgetPicker(); }
-                    @Override public void onAppLongPressed(String pkg) { confirmRemoveWidget(pkg); }
-                });
-        rv.setAdapter(widgetsAdapter);
-        pageWidgets.setOnLongClickListener(v -> { showWidgetPicker(); return true; });
-
-        View.OnDragListener widgetsDropTarget = (v, event) -> {
-            switch (event.getAction()) {
-                case android.view.DragEvent.ACTION_DRAG_STARTED:
-                    return event.getClipData() != null;
-                case android.view.DragEvent.ACTION_DROP:
-                    String pkg = null;
-                    Object localState = event.getLocalState();
-                    if (localState instanceof String) {
-                        pkg = (String) localState;
-                    } else if (event.getClipData() != null && event.getClipData().getItemCount() > 0) {
-                        CharSequence text = event.getClipData().getItemAt(0).getText();
-                        if (text != null) pkg = text.toString();
-                    }
-                    if (pkg != null) {
-                        addShortcutToWidgets(pkg, true);
-                        return true;
-                    }
-                    return false;
-                case android.view.DragEvent.ACTION_DRAG_ENDED:
-                    return true;
-                default:
-                    return true;
-            }
+    private void showThemePicker() {
+        final String[] labels = new String[] { "System default", "Light", "Dark" };
+        final String[] values = new String[] {
+                LauncherUiPrefs.THEME_SYSTEM,
+                LauncherUiPrefs.THEME_LIGHT,
+                LauncherUiPrefs.THEME_DARK
         };
-        pageWidgets.setOnDragListener(widgetsDropTarget);
-        pageHome.setOnDragListener(widgetsDropTarget);
-        updateHintCard();
-    }
-
-    private void refreshWidgets() {
-        if (widgetsAdapter != null) {
-            widgetsAdapter.setPackages(WidgetPrefs.getPackages(this));
-            updateHintCard();
-        }
-    }
-
-    private void updateHintCard() {
-        if (cardWidgetHint == null) return;
-        cardWidgetHint.setVisibility(WidgetPrefs.getPackages(this).isEmpty() ? View.VISIBLE : View.GONE);
-    }
-
-    private void addShortcutToWidgets(String pkg, boolean focusWidgetsPage) {
-        if (pkg == null || pkg.trim().isEmpty()) return;
-        if (!WidgetPrefs.getPackages(this).contains(pkg)) {
-            WidgetPrefs.add(this, pkg);
-            refreshWidgets();
-        }
-        if (focusWidgetsPage) showPage(PAGE_WIDGETS);
-    }
-
-    private void showWidgetPicker() {
-        List<AppSearchActivity.AppEntry> all = loadApps(false);
-        Set<String> added = new HashSet<>(WidgetPrefs.getPackages(this));
-        List<AppSearchActivity.AppEntry> avail = new ArrayList<>();
-        for (AppSearchActivity.AppEntry e : all) if (!added.contains(e.packageName)) avail.add(e);
-
-        View dv = LayoutInflater.from(this).inflate(R.layout.activity_app_search, null, false);
-        AlertDialog dlg = new AlertDialog.Builder(this, R.style.DarkDialog).setView(dv).create();
-
-        RecyclerView rv = dv.findViewById(R.id.rvApps);
-        rv.setLayoutManager(new LinearLayoutManager(this));
-        PickerAdapter pk = new PickerAdapter(this, avail, e -> {
-            addShortcutToWidgets(e.packageName, true);
-            dlg.dismiss();
-        });
-        rv.setAdapter(pk);
-
-        EditText s = dv.findViewById(R.id.etSearchApps);
-        s.setHint("Search to add");
-        s.addTextChangedListener(new SimpleTextWatcher() {
-            @Override public void onTextChanged(CharSequence cs, int a, int b, int c) {
-                String q = cs == null ? "" : cs.toString().toLowerCase(Locale.getDefault()).trim();
-                List<AppSearchActivity.AppEntry> f = new ArrayList<>();
-                for (AppSearchActivity.AppEntry e : avail) {
-                    if (e.label.toLowerCase(Locale.getDefault()).contains(q)) f.add(e);
-                }
-                pk.setItems(f);
+        String current = LauncherUiPrefs.getTheme(this);
+        int checked = 0;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(current)) {
+                checked = i;
+                break;
             }
-        });
-        View cl = dv.findViewById(R.id.ivSearchIcon);
-        cl.setVisibility(View.VISIBLE);
-        cl.setOnClickListener(v -> dlg.dismiss());
-        dlg.show();
-    }
-
-    private void confirmRemoveWidget(String pkg) {
+        }
         new AlertDialog.Builder(this, R.style.DarkDialog)
-                .setTitle("Remove shortcut?").setMessage(pkg)
-                .setPositiveButton("Remove", (d, w) -> { WidgetPrefs.remove(this, pkg); refreshWidgets(); })
-                .setNegativeButton("Cancel", null).show();
+                .setTitle("Color theme")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    LauncherUiPrefs.setTheme(this, values[which]);
+                    LauncherUiPrefs.applyTheme(this);
+                    dialog.dismiss();
+                    recreate();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
-    private static class PickerAdapter extends RecyclerView.Adapter<AppSearchAdapter.AppViewHolder> {
-        interface OnPick { void onPicked(AppSearchActivity.AppEntry e); }
-        private final android.content.Context ctx;
-        private final List<AppSearchActivity.AppEntry> items;
-        private final OnPick pick;
+    private void showFontSizePicker() {
+        final String[] labels = new String[] { "Small", "Medium", "Large" };
+        final String[] values = new String[] {
+                LauncherUiPrefs.FONT_SIZE_SMALL,
+                LauncherUiPrefs.FONT_SIZE_MEDIUM,
+                LauncherUiPrefs.FONT_SIZE_LARGE
+        };
+        String current = LauncherUiPrefs.getFontSize(this);
+        int checked = 1;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(current)) {
+                checked = i;
+                break;
+            }
+        }
+        new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setTitle("Font size")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    LauncherUiPrefs.setFontSize(this, values[which]);
+                    dialog.dismiss();
+                    recreate();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
 
-        PickerAdapter(android.content.Context c, List<AppSearchActivity.AppEntry> i, OnPick p) {
-            ctx = c; items = new ArrayList<>(i); pick = p;
+    private void showFontPicker() {
+        final String[] labels = new String[] {
+                "Default",
+                "Monospace",
+                "Goldman style",
+                "OpenDyslexic style",
+                "Ndot57 style"
+        };
+        final String[] values = new String[] {
+                LauncherUiPrefs.FONT_DEFAULT,
+                LauncherUiPrefs.FONT_MONOSPACE,
+                LauncherUiPrefs.FONT_GOLDMAN,
+                LauncherUiPrefs.FONT_OPENDYSLEXIC,
+                LauncherUiPrefs.FONT_NDOT57
+        };
+        String current = LauncherUiPrefs.getFont(this);
+        int checked = 0;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(current)) {
+                checked = i;
+                break;
+            }
+        }
+        new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setTitle("Font")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    LauncherUiPrefs.setFont(this, values[which]);
+                    dialog.dismiss();
+                    recreate();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void updateSettingsSummaries() {
+        TextView tvTheme = findViewById(R.id.tvThemeValue);
+        TextView tvFontSize = findViewById(R.id.tvFontSizeValue);
+        TextView tvFont = findViewById(R.id.tvFontValue);
+
+        if (tvTheme != null) {
+            String theme = LauncherUiPrefs.getTheme(this);
+            if (LauncherUiPrefs.THEME_LIGHT.equals(theme)) {
+                tvTheme.setText("Light");
+            } else if (LauncherUiPrefs.THEME_DARK.equals(theme)) {
+                tvTheme.setText("Dark");
+            } else {
+                tvTheme.setText("System default");
+            }
         }
 
-        void setItems(List<AppSearchActivity.AppEntry> u) {
-            items.clear(); items.addAll(u); notifyDataSetChanged();
+        if (tvFontSize != null) {
+            String fontSize = LauncherUiPrefs.getFontSize(this);
+            if (LauncherUiPrefs.FONT_SIZE_SMALL.equals(fontSize)) {
+                tvFontSize.setText("Small");
+            } else if (LauncherUiPrefs.FONT_SIZE_LARGE.equals(fontSize)) {
+                tvFontSize.setText("Large");
+            } else {
+                tvFontSize.setText("Medium");
+            }
         }
 
-        @Override public int getItemCount() { return items.size(); }
-
-        @androidx.annotation.NonNull @Override
-        public AppSearchAdapter.AppViewHolder onCreateViewHolder(@androidx.annotation.NonNull ViewGroup p, int vt) {
-            return new AppSearchAdapter.AppViewHolder(LayoutInflater.from(ctx).inflate(R.layout.item_app_row_text, p, false));
+        if (tvFont != null) {
+            String font = LauncherUiPrefs.getFont(this);
+            if (LauncherUiPrefs.FONT_MONOSPACE.equals(font)) {
+                tvFont.setText("Monospace");
+            } else if (LauncherUiPrefs.FONT_GOLDMAN.equals(font)) {
+                tvFont.setText("Goldman style");
+            } else if (LauncherUiPrefs.FONT_OPENDYSLEXIC.equals(font)) {
+                tvFont.setText("OpenDyslexic style");
+            } else if (LauncherUiPrefs.FONT_NDOT57.equals(font)) {
+                tvFont.setText("Ndot57 style");
+            } else {
+                tvFont.setText("Default");
+            }
         }
+    }
 
-        @Override public void onBindViewHolder(@androidx.annotation.NonNull AppSearchAdapter.AppViewHolder h, int pos) {
-            AppSearchActivity.AppEntry e = items.get(pos);
-            h.name.setText(e.label);
-            h.itemView.setOnClickListener(v -> pick.onPicked(e));
-        }
+    private void showLogoutDialog() {
+        new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setTitle("Log out")
+                .setMessage(
+                        "After logging out, switch the default home app back to your device launcher in system Home settings. Continue?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Accept", (dialog, which) -> {
+                    FirebaseAuth.getInstance().signOut();
+                    SessionPrefs.setChildAuthComplete(this, false);
+                    SessionPrefs.setPersonalPermissionsComplete(this, false);
+
+                    Intent roleSelection = new Intent(this, OnboardingActivity.class);
+                    roleSelection.putExtra("forceRoleSelection", true);
+                    startActivity(roleSelection);
+                    finishAffinity();
+                })
+                .show();
     }
 
     // ── Bottom nav ────────────────────────────────────────────────────────────
@@ -1026,7 +1097,7 @@ public class LauncherActivity extends AppCompatActivity {
         }
         navHome.setOnClickListener(v -> navClick(PAGE_HOME));
         navVault.setOnClickListener(v -> navClick(PAGE_VAULT));
-        navQr.setOnClickListener(v -> navClick(PAGE_QR));
+        navSettings.setOnClickListener(v -> navClick(PAGE_SETTINGS));
     }
 
     private void navClick(int page) {
@@ -1043,15 +1114,16 @@ public class LauncherActivity extends AppCompatActivity {
     private void updateNavVis() {
         navHome.setVisibility(navExpanded || currentPage == PAGE_HOME ? View.VISIBLE : View.GONE);
         navVault.setVisibility(navExpanded || currentPage == PAGE_VAULT ? View.VISIBLE : View.GONE);
-        navQr.setVisibility(navExpanded || currentPage == PAGE_QR ? View.VISIBLE : View.GONE);
+        navSettings.setVisibility(navExpanded || currentPage == PAGE_SETTINGS ? View.VISIBLE : View.GONE);
         alignNavIconMargins();
     }
 
     private void alignNavIconMargins() {
         boolean seenVisible = false;
-        ImageView[] icons = new ImageView[]{navHome, navVault, navQr};
+        ImageView[] icons = new ImageView[] { navHome, navVault, navSettings };
         for (ImageView icon : icons) {
-            if (icon == null) continue;
+            if (icon == null)
+                continue;
             ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) icon.getLayoutParams();
             lp.setMarginStart(seenVisible ? dpToPx(16) : 0);
             icon.setLayoutParams(lp);
@@ -1066,18 +1138,18 @@ public class LauncherActivity extends AppCompatActivity {
     private void showPage(int p) {
         currentPage = p;
         pageHome.setVisibility(p == PAGE_HOME ? View.VISIBLE : View.GONE);
-        pageWidgets.setVisibility(p == PAGE_WIDGETS ? View.VISIBLE : View.GONE);
         pageVault.setVisibility(p == PAGE_VAULT ? View.VISIBLE : View.GONE);
-        pageQr.setVisibility(p == PAGE_QR ? View.VISIBLE : View.GONE);
+        pageSettings.setVisibility(p == PAGE_SETTINGS ? View.VISIBLE : View.GONE);
 
         applyNavBackground(navHome, p == PAGE_HOME);
         applyNavBackground(navVault, p == PAGE_VAULT);
-        applyNavBackground(navQr, p == PAGE_QR);
+        applyNavBackground(navSettings, p == PAGE_SETTINGS);
         updateNavVis();
     }
 
     private void applyNavBackground(ImageView view, boolean active) {
-        if (view == null) return;
+        if (view == null)
+            return;
         int padding = navIconPadding > 0 ? navIconPadding : dpToPx(12);
         view.setBackgroundResource(active ? R.drawable.bg_nav_active : 0);
         view.setPadding(padding, padding, padding, padding);
@@ -1094,14 +1166,17 @@ public class LauncherActivity extends AppCompatActivity {
         clock.removeCallbacks(tick);
         long now = System.currentTimeMillis();
         long delay = 60_000L - (now % 60_000L);
-        if (delay < 1_000L) delay += 60_000L;
+        if (delay < 1_000L)
+            delay += 60_000L;
         clock.postDelayed(tick, delay);
     }
 
     private void bindDateTime() {
         Date now = new Date();
-        if (tvTime != null) tvTime.setText(timeFmt.format(now));
-        if (tvDate != null) tvDate.setText(dateFmt.format(now));
+        if (tvTime != null)
+            tvTime.setText(timeFmt.format(now));
+        if (tvDate != null)
+            tvDate.setText(dateFmt.format(now));
     }
 
     private void bindHeadline() {
@@ -1112,7 +1187,8 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void bindMetrics() {
-        if (metricsLoading) return;
+        if (metricsLoading)
+            return;
         metricsLoading = true;
         new Thread(() -> {
             TelemetrySnapshot local = repo.collectLocalSnapshot(this);
@@ -1124,7 +1200,8 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void renderMetrics(TelemetrySnapshot s) {
-        if (s == null) return;
+        if (s == null)
+            return;
         snap = s;
         TextView st = findViewById(R.id.tvScreenTime);
         TextView un = findViewById(R.id.tvUnlockCount);
@@ -1132,19 +1209,23 @@ public class LauncherActivity extends AppCompatActivity {
         TextView va = findViewById(R.id.tvVaultedCount);
         BarChartView ch = findViewById(R.id.barChart);
 
-        st.setText(s.dailyUsageMinutes.length > 0 ? fmtMin(s.dailyUsageMinutes[s.dailyUsageMinutes.length - 1]) : "0h 0m");
+        st.setText(
+                s.dailyUsageMinutes.length > 0 ? fmtMin(s.dailyUsageMinutes[s.dailyUsageMinutes.length - 1]) : "0h 0m");
         un.setText(String.valueOf(s.unlockCount));
         fr.setText(String.valueOf(s.frictionCount));
         va.setText(String.valueOf(s.vaultedCount));
         ch.setSamples(norm(s.dailyUsageMinutes));
 
         ch.setOnBarTouchListener(new BarChartView.OnBarTouchListener() {
-            @Override public void onBarTouch(int i, float v) {
+            @Override
+            public void onBarTouch(int i, float v) {
                 if (snap != null && i >= 0 && i < snap.dailyUsageMinutes.length) {
                     st.setText(fmtMin(snap.dailyUsageMinutes[i]));
                 }
             }
-            @Override public void onBarRelease() {
+
+            @Override
+            public void onBarRelease() {
                 if (snap != null && snap.dailyUsageMinutes.length > 0) {
                     st.setText(fmtMin(snap.dailyUsageMinutes[snap.dailyUsageMinutes.length - 1]));
                 }
@@ -1174,27 +1255,23 @@ public class LauncherActivity extends AppCompatActivity {
         if (openVault != null) {
             openVault.setOnClickListener(v -> showPage(PAGE_VAULT));
         }
-        View openQr = findViewById(R.id.btnOpenQrFromSwipe);
-        if (openQr != null) {
-            openQr.setOnClickListener(v -> showPage(PAGE_QR));
+        View openSettings = findViewById(R.id.btnOpenSettingsFromSwipe);
+        if (openSettings != null) {
+            openSettings.setOnClickListener(v -> showPage(PAGE_SETTINGS));
         }
-        View logout = findViewById(R.id.btnLogoutFromLauncher);
-        if (logout != null) logout.setOnClickListener(v -> {
-            FirebaseAuth.getInstance().signOut();
-            SessionPrefs.setChildAuthComplete(this, false);
-            startActivity(new Intent(this, MainActivity.class));
-            finishAffinity();
-        });
     }
 
     private void setupHomeShortcuts() {
-        if (tvTime != null) tvTime.setClickable(false);
+        if (tvTime != null)
+            tvTime.setClickable(false);
         if (tvDate != null) {
             tvDate.setOnClickListener(v -> openCalendarApp());
             tvDate.setClickable(true);
         }
-        if (btnPhone != null) btnPhone.setOnClickListener(v -> openPhoneApp());
-        if (btnCamera != null) btnCamera.setOnClickListener(v -> openCameraApp());
+        if (btnPhone != null)
+            btnPhone.setOnClickListener(v -> openPhoneApp());
+        if (btnCamera != null)
+            btnCamera.setOnClickListener(v -> openCameraApp());
     }
 
     private void openCalendarApp() {
@@ -1216,17 +1293,23 @@ public class LauncherActivity extends AppCompatActivity {
     private void launchBestEffortIntent(Intent... intents) {
         PackageManager pm = getPackageManager();
         for (Intent intent : intents) {
-            if (intent == null) continue;
+            if (intent == null)
+                continue;
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             if (intent.resolveActivity(pm) != null) {
-                try { startActivity(intent); return; } catch (ActivityNotFoundException ignored) {}
+                try {
+                    startActivity(intent);
+                    return;
+                } catch (ActivityNotFoundException ignored) {
+                }
             }
         }
         Toast.makeText(this, "No app found", Toast.LENGTH_SHORT).show();
     }
 
     private void ensureDefaultLauncher() {
-        if (askedHomeRole) return;
+        if (askedHomeRole)
+            return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             RoleManager rm = getSystemService(RoleManager.class);
             if (rm != null && !rm.isRoleHeld(RoleManager.ROLE_HOME)) {
@@ -1242,12 +1325,6 @@ public class LauncherActivity extends AppCompatActivity {
         }
     }
 
-    private void bindLinkedParent() {
-        TextView tv = findViewById(R.id.tvLinkedParentStatus);
-        // Firestore linking logic removed, showing locally linked status if any.
-        tv.setText("Linked parent: LOCAL_ONLY");
-    }
-
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private List<AppSearchActivity.AppEntry> loadApps(boolean excludeVaulted) {
@@ -1258,9 +1335,11 @@ public class LauncherActivity extends AppCompatActivity {
         String self = getPackageName();
         List<AppSearchActivity.AppEntry> list = new ArrayList<>();
         for (ResolveInfo r : ri) {
-            if (r.activityInfo == null) continue;
+            if (r.activityInfo == null)
+                continue;
             String pkg = r.activityInfo.packageName;
-            if (self.equals(pkg) || vault.contains(pkg)) continue;
+            if (self.equals(pkg) || vault.contains(pkg))
+                continue;
             CharSequence lbl = r.loadLabel(getPackageManager());
             list.add(new AppSearchActivity.AppEntry(lbl == null ? pkg : lbl.toString(), "", pkg));
         }
@@ -1271,19 +1350,31 @@ public class LauncherActivity extends AppCompatActivity {
     private void hideKeyboard() {
         View f = getCurrentFocus();
         if (f != null) {
-            android.view.inputmethod.InputMethodManager imm =
-                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            if (imm != null) imm.hideSoftInputFromWindow(f.getWindowToken(), 0);
+            android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(
+                    INPUT_METHOD_SERVICE);
+            if (imm != null)
+                imm.hideSoftInputFromWindow(f.getWindowToken(), 0);
         }
     }
 
-    private int dpToPx(int dp) { return Math.round(dp * getResources().getDisplayMetrics().density); }
-    private String fmtMin(long m) { return (m / 60) + "h " + (m % 60) + "m"; }
+    private int dpToPx(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
+
+    private String fmtMin(long m) {
+        return (m / 60) + "h " + (m % 60) + "m";
+    }
+
     private float[] norm(long[] v) {
-        if (v == null || v.length == 0) return new float[]{.2f, .2f, .2f, .2f, .2f, .2f, .2f};
-        long mx = 1; for (long x : v) if (x > mx) mx = x;
+        if (v == null || v.length == 0)
+            return new float[] { .2f, .2f, .2f, .2f, .2f, .2f, .2f };
+        long mx = 1;
+        for (long x : v)
+            if (x > mx)
+                mx = x;
         float[] o = new float[v.length];
-        for (int i = 0; i < v.length; i++) o[i] = Math.max(.1f, Math.min(1f, (float) v[i] / mx));
+        for (int i = 0; i < v.length; i++)
+            o[i] = Math.max(.1f, Math.min(1f, (float) v[i] / mx));
         return o;
     }
 }

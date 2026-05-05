@@ -2,7 +2,7 @@
 <!--
     Launcher root layout.
     Architecture:
-    - Home + Widgets in a horizontal ViewFlipper-like setup (Home=page0, Widgets=page1)
+    - Home + Vault + Settings pages
     - App drawer overlays from the bottom as a sliding sheet
     - Bottom nav pill floats above everything
 -->
@@ -13,7 +13,7 @@
     android:layout_height="match_parent"
     android:background="@color/bg_primary">
 
-    <!-- ── Horizontal page container (Home ↔ Widgets) ──────────────────────── -->
+    <!-- ── Page container (Home / Vault / Settings) ────────────────────────── -->
     <FrameLayout
         android:id="@+id/pageContainer"
         android:layout_width="0dp"
@@ -25,13 +25,10 @@
 
         <include android:id="@+id/pageHome"    layout="@layout/view_launcher_home_panel" />
 
-        <include android:id="@+id/pageWidgets" layout="@layout/view_launcher_widgets_panel"
-            android:visibility="gone" />
-
         <include android:id="@+id/pageVault"   layout="@layout/view_launcher_vault_panel"
             android:visibility="gone" />
 
-        <include android:id="@+id/pageQr"      layout="@layout/view_launcher_qr_panel"
+        <include android:id="@+id/pageSettings"      layout="@layout/view_launcher_qr_panel"
             android:visibility="gone" />
 
     </FrameLayout>
@@ -115,13 +112,13 @@
                 android:visibility="gone" />
 
             <ImageView
-                android:id="@+id/navQr"
+                android:id="@+id/navSettings"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:layout_marginStart="16dp"
-                android:contentDescription="QR pairing"
+                android:contentDescription="Settings"
                 android:padding="12dp"
-                android:src="@drawable/ic_family"
+                android:src="@drawable/ic_settings"
                 android:tint="@color/text_primary"
                 android:visibility="gone" />
 
