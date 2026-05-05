@@ -53,6 +53,33 @@ final class QrCodeUtils {
         return trimmed;
     }
 
+    static PairingPayload extractPairingPayload(String rawText) {
+        if (rawText == null) {
+            return null;
+        }
+        String trimmed = rawText.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        String payload = trimmed;
+        if (trimmed.startsWith(PAIRING_PREFIX)) {
+            payload = trimmed.substring(PAIRING_PREFIX.length()).trim();
+        }
+
+        int separator = payload.indexOf('|');
+        if (separator <= 0 || separator >= payload.length() - 1) {
+            return null;
+        }
+
+        String uid = payload.substring(0, separator).trim();
+        String token = payload.substring(separator + 1).trim();
+        if (uid.isEmpty() || token.isEmpty()) {
+            return null;
+        }
+        return new PairingPayload(uid, token);
+    }
+
     static Bitmap generateQrBitmap(String content, int size) throws WriterException {
         BitMatrix matrix = new QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size);
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
@@ -112,6 +139,16 @@ final class QrCodeUtils {
         @Override
         public boolean isRotateSupported() {
             return false;
+        }
+    }
+
+    static final class PairingPayload {
+        final String uid;
+        final String token;
+
+        PairingPayload(String uid, String token) {
+            this.uid = uid;
+            this.token = token;
         }
     }
 }

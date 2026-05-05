@@ -183,15 +183,17 @@ public class SignupActivity extends AppCompatActivity {
                     return;
                 }
 
-                Intent intent = new Intent(this, SetupActivity.class);
                 if (role == SessionPrefs.Role.PARENT) {
-                    intent.putExtra("next_activity", ParentLinkChildActivity.class.getName());
+                    Intent intent = new Intent(this, ParentLinkChildActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(intent);
                 } else {
                     SessionPrefs.setChildAuthComplete(this, true);
+                    Intent intent = new Intent(this, SetupActivity.class);
                     intent.putExtra("next_activity", LauncherActivity.class.getName());
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(intent);
                 }
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                startActivity(intent);
                 finish();
             });
         });

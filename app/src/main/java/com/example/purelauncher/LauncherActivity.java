@@ -3,10 +3,14 @@ package com.example.purelauncher;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.ColorStateList;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.app.role.RoleManager;
 import android.os.Build;
@@ -42,17 +46,30 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.SetOptions;
+import com.google.firebase.firestore.WriteBatch;
 import com.purelauncher.ui.views.BarChartView;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 public class LauncherActivity extends AppCompatActivity {
+
+    private static final String COLLECTION_SYNC_REQUESTS = "sync_requests";
+    private static final String PREFS_SYNC = "child_sync_prefs";
+    private static final String KEY_LAST_SYNC_REQUEST_ID = "last_sync_request_id";
 
     private static final int PAGE_HOME = 0, PAGE_VAULT = 1, PAGE_SETTINGS = 2;
 
@@ -114,6 +131,7 @@ public class LauncherActivity extends AppCompatActivity {
     private boolean isVaultSearchActive = false;
 
     private int navIconPadding = 0;
+    private ListenerRegistration syncRequestListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -187,6 +205,7 @@ public class LauncherActivity extends AppCompatActivity {
         }
         startClockUpdates();
         startMetricsUpdates();
+        startSyncRequestListener();
         blockNotificationShade();
         reloadDrawerApps();
         refreshVaultPage();
@@ -211,6 +230,172 @@ public class LauncherActivity extends AppCompatActivity {
         super.onPause();
         clock.removeCallbacks(tick);
         clock.removeCallbacks(metricsTick);
+        stopSyncRequestListener();
+    }
+
+    private void startSyncRequestListener() {
+        if (syncRequestListener != null) {
+            return;
+        }
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            return;
+        }
+        syncRequestListener = FirebaseFirestore.getInstance()
+                .collection(COLLECTION_SYNC_REQUESTS)
+                .document(user.getUid())
+                .addSnapshotListener((snapshot, error) -> {
+                    if (error != null || snapshot == null || !snapshot.exists()) {
+                        return;
+                    }
+                    handleSyncRequest(snapshot);
+                });
+    }
+
+    private void stopSyncRequestListener() {
+        if (syncRequestListener != null) {
+            syncRequestListener.remove();
+            syncRequestListener = null;
+        }
+    }
+
+    private void handleSyncRequest(DocumentSnapshot snapshot) {
+        String requestId = snapshot.getString("requestId");
+        if (requestId == null || requestId.trim().isEmpty()) {
+            return;
+        }
+        if (!isOnline()) {
+            return;
+        }
+        if (requestId.equals(getLastSyncRequestId())) {
+            return;
+        }
+        syncToFirestore(requestId);
+    }
+
+    private void syncToFirestore(String requestId) {
+        new Thread(() -> {
+            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            if (user == null) {
+                return;
+            }
+            TelemetrySnapshot local = repo.collectLocalSnapshot(this);
+            List<AppSearchActivity.AppEntry> apps = loadApps(false);
+            Set<String> vaulted = VaultPrefs.getVaultedPackages(this);
+
+            FirebaseFirestore db = FirebaseFirestore.getInstance();
+            String uid = user.getUid();
+            WriteBatch batch = db.batch();
+
+            DocumentReference metricsRef = db.collection("child_metrics").document(uid);
+            Map<String, Object> metrics = buildMetricsMap(local);
+            batch.set(metricsRef, metrics, SetOptions.merge());
+
+            for (AppSearchActivity.AppEntry app : apps) {
+                if (app == null || app.packageName == null) {
+                    continue;
+                }
+                DocumentReference appRef = db.collection("child_apps")
+                        .document(uid)
+                        .collection("apps")
+                        .document(app.packageName);
+                Map<String, Object> data = new HashMap<>();
+                data.put("name", app.label == null ? app.packageName : app.label);
+                data.put("packageName", app.packageName);
+                batch.set(appRef, data, SetOptions.merge());
+            }
+
+            PackageManager pm = getPackageManager();
+            for (String pkg : vaulted) {
+                if (pkg == null || pkg.trim().isEmpty()) {
+                    continue;
+                }
+                DocumentReference vaultRef = db.collection("child_vault")
+                        .document(uid)
+                        .collection("apps")
+                        .document(pkg);
+                Map<String, Object> data = new HashMap<>();
+                data.put("name", getLabelForPackage(pm, pkg));
+                data.put("friction", VaultPrefs.getFrictionType(this, pkg));
+                data.put("dailyLimitMinutes", VaultPrefs.getAppLimitMinutes(this, pkg));
+                batch.set(vaultRef, data, SetOptions.merge());
+            }
+
+            DocumentReference requestRef = db.collection(COLLECTION_SYNC_REQUESTS).document(uid);
+            Map<String, Object> ack = new HashMap<>();
+            ack.put("lastSyncedAt", FieldValue.serverTimestamp());
+            ack.put("lastSyncedRequestId", requestId);
+            batch.set(requestRef, ack, SetOptions.merge());
+
+            batch.commit().addOnSuccessListener(aVoid -> saveLastSyncRequestId(requestId));
+        }).start();
+    }
+
+    private Map<String, Object> buildMetricsMap(TelemetrySnapshot local) {
+        Map<String, Object> data = new HashMap<>();
+        long screenMinutes = 0L;
+        if (local != null && local.dailyUsageMinutes.length > 0) {
+            screenMinutes = local.dailyUsageMinutes[local.dailyUsageMinutes.length - 1];
+        }
+        data.put("screenTimeMinutes", screenMinutes);
+        data.put("unlockCount", local == null ? 0 : local.unlockCount);
+        data.put("frictionCount", local == null ? 0 : local.frictionCount);
+        data.put("vaultedCount", local == null ? 0 : local.vaultedCount);
+        data.put("dailyUsageMinutes", toLongList(local == null ? new long[0] : local.dailyUsageMinutes));
+        data.put("lastUpdated", FieldValue.serverTimestamp());
+        return data;
+    }
+
+    private List<Long> toLongList(long[] values) {
+        List<Long> out = new ArrayList<>();
+        if (values == null) {
+            return out;
+        }
+        for (long v : values) {
+            out.add(v);
+        }
+        return out;
+    }
+
+    private String getLastSyncRequestId() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
+        return prefs.getString(KEY_LAST_SYNC_REQUEST_ID, "");
+    }
+
+    private void saveLastSyncRequestId(String requestId) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
+        prefs.edit().putString(KEY_LAST_SYNC_REQUEST_ID, requestId).apply();
+    }
+
+    private boolean isOnline() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (cm == null) {
+            return false;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            android.net.Network nw = cm.getActiveNetwork();
+            if (nw == null) {
+                return false;
+            }
+            NetworkCapabilities caps = cm.getNetworkCapabilities(nw);
+            return caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+        }
+        // noinspection deprecation
+        NetworkInfo info = cm.getActiveNetworkInfo();
+        // noinspection deprecation
+        return info != null && info.isConnected();
+    }
+
+    private String getLabelForPackage(PackageManager pm, String pkg) {
+        try {
+            ApplicationInfo info = pm.getApplicationInfo(pkg, 0);
+            CharSequence label = pm.getApplicationLabel(info);
+            return label == null ? pkg : label.toString();
+        } catch (PackageManager.NameNotFoundException ignored) {
+            return pkg;
+        }
     }
 
     @Override

@@ -132,14 +132,14 @@ public class LoginActivity extends AppCompatActivity {
             // Sync the role and proceed
             SessionPrefs.setRole(this, serverRole);
 
-            Intent intent = new Intent(this, SetupActivity.class);
             if (serverRole == SessionPrefs.Role.PARENT) {
-                intent.putExtra("next_activity", ParentLinkChildActivity.class.getName());
+                startActivity(new Intent(this, ParentLinkChildActivity.class));
             } else {
                 SessionPrefs.setChildAuthComplete(this, true);
+                Intent intent = new Intent(this, SetupActivity.class);
                 intent.putExtra("next_activity", LauncherActivity.class.getName());
+                startActivity(intent);
             }
-            startActivity(intent);
             finish();
         });
     }

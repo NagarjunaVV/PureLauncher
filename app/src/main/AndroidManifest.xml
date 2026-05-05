@@ -3,9 +3,14 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -17,7 +22,9 @@
         android:resizeableActivity="false"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.PureLauncher">
+        android:theme="@style/Theme.PureLauncher"
+        android:extractNativeLibs="false"
+        tools:targetApi="31">
 
         <service
             android:name=".AppUsageGuardService"
@@ -63,6 +70,9 @@
             android:exported="false" />
         <activity
             android:name=".ParentLinkChildActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ParentQrScannerActivity"
             android:exported="false" />
         <activity
             android:name=".ParentFeatureTourActivity"

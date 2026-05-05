@@ -1,31 +1,30 @@
 package com.example.purelauncher;
 
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.net.Uri;
 import android.os.Bundle;
-import android.provider.MediaStore;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 public class ParentLinkChildActivity extends AppCompatActivity {
 
-    private EditText childUidInput;
     private TextView statusView;
     private final UserProfileStore userProfileStore = new UserProfileStore();
-    private ActivityResultLauncher<Void> cameraScanLauncher;
-    private ActivityResultLauncher<String[]> galleryPickerLauncher;
+    private ActivityResultLauncher<Intent> qrScanLauncher;
+    private final FirebaseFirestore firestore = FirebaseFirestore.getInstance();
+    private static final long TOKEN_EXPIRY_MS = 5 * 60 * 1000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,110 +38,42 @@ public class ParentLinkChildActivity extends AppCompatActivity {
             return insets;
         });
 
-        childUidInput = findViewById(R.id.etChildUid);
         statusView = findViewById(R.id.tvLinkStatus);
 
-        cameraScanLauncher = registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview(), bitmap -> {
-            if (bitmap == null) {
-                Toast.makeText(this, "Scan canceled.", Toast.LENGTH_SHORT).show();
+        qrScanLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            if (result.getResultCode() != RESULT_OK || result.getData() == null) {
                 return;
             }
-            applyScannedBitmap(bitmap);
-        });
-
-        galleryPickerLauncher = registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(), uri -> {
-            if (uri == null) {
-                Toast.makeText(this, "No image selected.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            decodeGalleryImage(uri);
-        });
-
-        findViewById(R.id.btnLinkTyped).setOnClickListener(v -> linkTypedChild());
-        findViewById(R.id.btnScanQr).setOnClickListener(v -> cameraScanLauncher.launch(null));
-        findViewById(R.id.btnGallery).setOnClickListener(v -> galleryPickerLauncher.launch(new String[]{"image/*"}));
-        findViewById(R.id.btnUnlink).setOnClickListener(v -> unlinkChild());
-
-        findViewById(R.id.btnContinue).setOnClickListener(v -> {
-            SessionPrefs.setParentLinkingComplete(this, true);
-            startActivity(new Intent(this, ActivityParentDashboardActivity.class));
-            finish();
-        });
-
-        refreshCurrentLinkState();
-    }
-
-    private void linkTypedChild() {
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) {
-            Toast.makeText(this, "Please login again.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String childUid = childUidInput.getText().toString().trim();
-        if (childUid.isEmpty()) {
-            Toast.makeText(this, "Enter child UID from child QR screen.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        linkChild(user, childUid);
-    }
-
-    private void applyScannedBitmap(Bitmap bitmap) {
-        try {
-            String rawText = QrCodeUtils.decodeQrBitmap(bitmap);
-            String childUid = QrCodeUtils.extractChildUid(rawText);
-            if (childUid == null || childUid.isEmpty()) {
+            String rawPayload = result.getData().getStringExtra(ParentQrScannerActivity.EXTRA_QR_PAYLOAD);
+            QrCodeUtils.PairingPayload payload = QrCodeUtils.extractPairingPayload(rawPayload);
+            if (payload == null) {
                 Toast.makeText(this, "Could not read QR code.", Toast.LENGTH_SHORT).show();
                 return;
             }
-            childUidInput.setText(childUid);
-            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-            if (user != null) {
-                linkChild(user, childUid);
-            }
-        } catch (Exception e) {
-            Toast.makeText(this, "Unable to decode QR image.", Toast.LENGTH_SHORT).show();
-        }
-    }
+            validateAndLink(payload);
+        });
 
-    private void decodeGalleryImage(Uri uri) {
-        try {
-            Bitmap bitmap;
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                bitmap = android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(getContentResolver(), uri));
-            } else {
-                bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
-            }
-            applyScannedBitmap(bitmap);
-        } catch (Exception e) {
-            Toast.makeText(this, "Unable to open image.", Toast.LENGTH_SHORT).show();
-        }
+        findViewById(R.id.btnOpenScanner).setOnClickListener(v -> {
+            Intent intent = new Intent(this, ParentQrScannerActivity.class);
+            qrScanLauncher.launch(intent);
+        });
+
+        refreshCurrentLinkState();
     }
 
     private void linkChild(FirebaseUser user, String childUid) {
         userProfileStore.setLinkedChildUid(user, childUid).addOnCompleteListener(task -> {
             if (task.isSuccessful()) {
                 Toast.makeText(this, "Child linked successfully.", Toast.LENGTH_SHORT).show();
-                refreshCurrentLinkState();
+                SessionPrefs.setParentLinkingComplete(this, true);
+                Intent intent = new Intent(this, SetupActivity.class);
+                intent.putExtra("next_activity", ActivityParentDashboardActivity.class.getName());
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(intent);
+                finish();
             } else {
                 String message = task.getException() == null ? "Failed to link child." : task.getException().getMessage();
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
-    private void unlinkChild() {
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) {
-            Toast.makeText(this, "Please login again.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        userProfileStore.unlinkLinkedChild(user).addOnCompleteListener(task -> {
-            if (task.isSuccessful()) {
-                Toast.makeText(this, "Link removed.", Toast.LENGTH_SHORT).show();
-                childUidInput.setText("");
-                refreshCurrentLinkState();
-            } else {
-                Toast.makeText(this, "Failed to remove link.", Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -159,8 +90,50 @@ public class ParentLinkChildActivity extends AppCompatActivity {
                 statusView.setText("Status: no child linked.");
                 return;
             }
-            statusView.setText("Status: linked to " + childUid.trim());
-            childUidInput.setText(childUid.trim());
+            statusView.setText("Status: linked");
         });
+    }
+
+    private void validateAndLink(QrCodeUtils.PairingPayload payload) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Toast.makeText(this, "Please login again.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        statusView.setText("Status: validating QR...");
+        firestore.collection("child_link_tokens")
+                .document(payload.uid)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    if (!snapshot.exists()) {
+                        statusView.setText("Status: invalid QR.");
+                        Toast.makeText(this, "QR code is invalid or expired.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    String serverToken = snapshot.getString("token");
+                    Timestamp updatedAt = snapshot.getTimestamp("updatedAt");
+                    if (serverToken == null || !serverToken.equals(payload.token)) {
+                        statusView.setText("Status: invalid QR.");
+                        Toast.makeText(this, "QR code is invalid or expired.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    if (updatedAt != null) {
+                        long ageMs = System.currentTimeMillis() - updatedAt.toDate().getTime();
+                        if (ageMs > TOKEN_EXPIRY_MS) {
+                            statusView.setText("Status: QR expired.");
+                            Toast.makeText(this, "QR code expired. Ask the child to refresh.", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                    }
+
+                    linkChild(user, payload.uid);
+                })
+                .addOnFailureListener(error -> {
+                    statusView.setText("Status: validation failed.");
+                    Toast.makeText(this, "Unable to validate QR. Try again.", Toast.LENGTH_SHORT).show();
+                });
     }
 }

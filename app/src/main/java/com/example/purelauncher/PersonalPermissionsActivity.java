@@ -38,7 +38,6 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
     private Button nextButton;
 
     private ActivityResultLauncher<Intent> settingsLauncher;
-    private ActivityResultLauncher<Intent> roleRequestLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,12 +56,11 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
                     basePaddingLeft + systemBars.left,
                     basePaddingTop + systemBars.top,
                     basePaddingRight + systemBars.right,
-                    basePaddingBottom + systemBars.bottom
-            );
+                    basePaddingBottom + systemBars.bottom);
             return insets;
         });
 
-        steps = new PermissionStep[]{
+        steps = new PermissionStep[] {
                 PermissionStep.DEFAULT_HOME,
                 PermissionStep.OVERLAY,
                 PermissionStep.USAGE_ACCESS
@@ -79,12 +77,7 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
 
         settingsLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
-                result -> renderCurrentStep()
-        );
-        roleRequestLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> renderCurrentStep()
-        );
+                result -> renderCurrentStep());
 
         grantButton.setOnClickListener(v -> openPermissionSettings(steps[currentStepIndex]));
         backButton.setOnClickListener(v -> {
@@ -145,10 +138,12 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
             body.setText("Set PureLauncher as your default launcher so all focus features work consistently.");
         } else if (step == PermissionStep.OVERLAY) {
             title.setText("Allow overlay access");
-            body.setText("PureLauncher needs overlay access to show intentional friction prompts over distracting apps.");
+            body.setText(
+                    "PureLauncher needs overlay access to show intentional friction prompts over distracting apps.");
         } else if (step == PermissionStep.USAGE_ACCESS) {
             title.setText("Allow usage access");
-            body.setText("Usage access powers app-time tracking and lock rules, so we can reduce screen-time distractions.");
+            body.setText(
+                    "Usage access powers app-time tracking and lock rules, so we can reduce screen-time distractions.");
         }
 
         boolean granted = isGranted(step);
@@ -176,7 +171,8 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
         }
 
         if (step == PermissionStep.DEFAULT_HOME) {
-            roleRequestLauncher.launch(RequiredPermissions.defaultHomeIntent(this));
+            Intent intent = new Intent(Settings.ACTION_HOME_SETTINGS);
+            settingsLauncher.launch(intent);
             return;
         }
 
@@ -200,11 +196,24 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
     }
 
     private void askToRemovePermissionBeforeBack(PermissionStep step) {
-        new AlertDialog.Builder(this, R.style.DarkDialog)
-                .setTitle("Remove current permission?")
-                .setMessage("To go back, remove this permission in system settings first. PureLauncher will stay on this step until it is removed.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Open Settings", (dialog, which) -> openPermissionSettings(step))
-                .show();
+        android.view.View view = getLayoutInflater().inflate(R.layout.dialog_permission_remove, null);
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
+
+        Button btnCancel = view.findViewById(R.id.btnCancel);
+        Button btnOpenSettings = view.findViewById(R.id.btnOpenSettings);
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+        if (btnOpenSettings != null) {
+            btnOpenSettings.setOnClickListener(v -> {
+                dialog.dismiss();
+                openPermissionSettings(step);
+            });
+        }
+
+        dialog.show();
     }
 }

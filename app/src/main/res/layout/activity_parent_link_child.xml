@@ -25,62 +25,44 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="14dp"
-        android:text="Link by typing the child code, scanning the QR, or choosing a QR image from the gallery."
+        android:text="Scan the child's QR to link accounts."
         android:textColor="@color/text_secondary"
         android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvTitle" />
 
-    <androidx.cardview.widget.CardView
-        android:id="@+id/cardQr"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_marginTop="24dp"
-        app:cardBackgroundColor="@color/bg_card"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="0dp"
-        app:layout_constraintBottom_toTopOf="@id/btnScanQr"
-        app:layout_constraintEnd_toEndOf="parent"
+    <LinearLayout
+        android:id="@+id/btnOpenScanner"
+        android:layout_width="160dp"
+        android:layout_height="160dp"
+        android:layout_marginTop="36dp"
+        android:background="@drawable/bg_scan_button"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        app:layout_constraintTop_toBottomOf="@id/tvSubtitle"
+        app:layout_constraintBottom_toTopOf="@id/tvLinkStatus"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvSubtitle">
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:padding="24dp">
+        <ImageView
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:contentDescription="Open scanner"
+            android:src="@drawable/ic_camera"
+            android:tint="@color/text_primary" />
 
-            <ImageView
-                android:layout_width="84dp"
-                android:layout_height="84dp"
-                android:background="@drawable/bg_icon_black"
-                android:contentDescription="QR pairing"
-                android:padding="20dp"
-                android:src="@drawable/ic_family" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:gravity="center"
-                android:text="QR Pairing"
-                android:textColor="@color/text_primary"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center"
-                android:text="The child QR screen now generates a pairing payload that can be scanned or decoded from a gallery image."
-                android:textColor="@color/text_secondary"
-                android:textSize="15sp" />
-
-        </LinearLayout>
-    </androidx.cardview.widget.CardView>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Tap to scan"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/tvLinkStatus"
@@ -90,89 +72,9 @@
         android:text="Status: checking link state..."
         android:textColor="@color/text_secondary"
         android:textSize="13sp"
-        app:layout_constraintTop_toBottomOf="@id/cardQr"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <Button
-        android:id="@+id/btnLinkTyped"
-        android:layout_width="0dp"
-        android:layout_height="52dp"
-        android:layout_marginTop="16dp"
-        android:backgroundTint="@color/bg_button"
-        android:text="Link typed code"
-        android:textColor="@color/text_on_white"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@id/btnScanQr"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
-
-    <Button
-        android:id="@+id/btnScanQr"
-        android:layout_width="0dp"
-        android:layout_height="52dp"
-        android:layout_marginTop="12dp"
-        android:backgroundTint="@color/bg_button"
-        android:text="Scan QR with camera"
-        android:textColor="@color/text_on_white"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@id/btnGallery"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
-
-    <Button
-        android:id="@+id/btnGallery"
-        android:layout_width="0dp"
-        android:layout_height="52dp"
-        android:layout_marginTop="12dp"
-        android:backgroundTint="@color/bg_card_elevated"
-        android:text="Pick QR from gallery"
-        android:textColor="@color/text_primary"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@id/btnUnlink"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
-
-    <Button
-        android:id="@+id/btnUnlink"
-        android:layout_width="0dp"
-        android:layout_height="52dp"
-        android:layout_marginTop="12dp"
-        android:backgroundTint="@color/bg_card_elevated"
-        android:text="Remove current link"
-        android:textColor="@color/text_primary"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@id/btnContinue"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
-
-    <EditText
-        android:id="@+id/etChildUid"
-        android:layout_width="0dp"
-        android:layout_height="52dp"
-        android:layout_marginTop="16dp"
-        android:background="@drawable/bg_input_rounded"
-        android:hint="Paste child UID from child QR screen"
-        android:inputType="text"
-        android:paddingStart="14dp"
-        android:paddingEnd="14dp"
-        android:textColor="@color/text_primary"
-        android:textColorHint="@color/text_secondary"
-        app:layout_constraintBottom_toTopOf="@id/btnLinkTyped"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <Button
-        android:id="@+id/btnContinue"
-        android:layout_width="0dp"
-        android:layout_height="52dp"
-        android:layout_marginTop="12dp"
-        android:backgroundTint="@color/bg_card_elevated"
-        android:text="Continue to Dashboard"
-        android:textColor="@color/text_primary"
-        android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/btnOpenScanner"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

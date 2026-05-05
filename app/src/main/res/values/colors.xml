@@ -21,6 +21,9 @@
     <!-- Accents (monochrome) -->
     <color name="accent_white">#FFFFFF</color>
     <color name="accent_dim">#DDDDDD</color>
+    <color name="scan_accent">#111111</color>
+    <color name="scan_button_fill">#E6E6E6</color>
+    <color name="scan_overlay_text">#FFFFFF</color>
 
     <!-- Status -->
     <color name="color_restricted">#E53935</color>
