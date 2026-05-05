@@ -74,14 +74,5 @@ public class ChildQrActivity extends AppCompatActivity {
         Button backHome = findViewById(R.id.btnBackHome);
         backHome.setOnClickListener(v -> finish());
 
-        Button logout = findViewById(R.id.btnLogout);
-        logout.setOnClickListener(v -> {
-            FirebaseAuth.getInstance().signOut();
-            SessionPrefs.setChildAuthComplete(this, false);
-            SessionPrefs.setPersonalPermissionsComplete(this, false);
-            SessionPrefs.setPersonalTourComplete(this, false);
-            startActivity(new android.content.Intent(this, MainActivity.class));
-            finishAffinity();
-        });
     }
 }

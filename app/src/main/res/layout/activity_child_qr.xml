@@ -96,17 +96,4 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <Button
-        android:id="@+id/btnLogout"
-        android:layout_width="0dp"
-        android:layout_height="52dp"
-        android:layout_marginTop="12dp"
-        android:backgroundTint="@color/bg_card_elevated"
-        android:text="Log out"
-        android:textColor="@color/text_primary"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@id/btnBackHome"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
 </androidx.constraintlayout.widget.ConstraintLayout>

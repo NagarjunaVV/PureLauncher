@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.app.role.RoleManager;
 import android.os.Build;
@@ -13,6 +14,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -31,6 +33,8 @@ import android.widget.RadioGroup;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.AppCompatRadioButton;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -918,10 +922,6 @@ public class LauncherActivity extends AppCompatActivity {
         if (rowFontSize != null)
             rowFontSize.setOnClickListener(v -> showFontSizePicker());
 
-        View rowFont = findViewById(R.id.rowFont);
-        if (rowFont != null)
-            rowFont.setOnClickListener(v -> showFontPicker());
-
         View rowLinkDevice = findViewById(R.id.rowLinkDevice);
         if (rowLinkDevice != null) {
             rowLinkDevice.setOnClickListener(v -> {
@@ -948,23 +948,11 @@ public class LauncherActivity extends AppCompatActivity {
                 LauncherUiPrefs.THEME_DARK
         };
         String current = LauncherUiPrefs.getTheme(this);
-        int checked = 0;
-        for (int i = 0; i < values.length; i++) {
-            if (values[i].equals(current)) {
-                checked = i;
-                break;
-            }
-        }
-        new AlertDialog.Builder(this, R.style.DarkDialog)
-                .setTitle("Color theme")
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                    LauncherUiPrefs.setTheme(this, values[which]);
-                    LauncherUiPrefs.applyTheme(this);
-                    dialog.dismiss();
-                    recreate();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        showSingleChoiceDialog("Color theme", labels, values, current, value -> {
+            LauncherUiPrefs.setTheme(this, value);
+            LauncherUiPrefs.applyTheme(this);
+            recreate();
+        });
     }
 
     private void showFontSizePicker() {
@@ -975,62 +963,75 @@ public class LauncherActivity extends AppCompatActivity {
                 LauncherUiPrefs.FONT_SIZE_LARGE
         };
         String current = LauncherUiPrefs.getFontSize(this);
-        int checked = 1;
-        for (int i = 0; i < values.length; i++) {
-            if (values[i].equals(current)) {
-                checked = i;
-                break;
-            }
-        }
-        new AlertDialog.Builder(this, R.style.DarkDialog)
-                .setTitle("Font size")
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                    LauncherUiPrefs.setFontSize(this, values[which]);
-                    dialog.dismiss();
-                    recreate();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        showSingleChoiceDialog("Font size", labels, values, current, value -> {
+            LauncherUiPrefs.setFontSize(this, value);
+            recreate();
+        });
     }
 
-    private void showFontPicker() {
-        final String[] labels = new String[] {
-                "Default",
-                "Monospace",
-                "Goldman style",
-                "OpenDyslexic style",
-                "Ndot57 style"
-        };
-        final String[] values = new String[] {
-                LauncherUiPrefs.FONT_DEFAULT,
-                LauncherUiPrefs.FONT_MONOSPACE,
-                LauncherUiPrefs.FONT_GOLDMAN,
-                LauncherUiPrefs.FONT_OPENDYSLEXIC,
-                LauncherUiPrefs.FONT_NDOT57
-        };
-        String current = LauncherUiPrefs.getFont(this);
-        int checked = 0;
-        for (int i = 0; i < values.length; i++) {
+    private interface SelectionHandler {
+        void onSelect(String value);
+    }
+
+    private void showSingleChoiceDialog(String title, String[] labels, String[] values, String current,
+            SelectionHandler handler) {
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_single_choice, null);
+        TextView titleView = view.findViewById(R.id.tvDialogTitle);
+        RadioGroup group = view.findViewById(R.id.rgDialogOptions);
+        titleView.setText(title);
+
+        ColorStateList radioColors = ContextCompat.getColorStateList(this, R.color.dialog_radio_color);
+        int checkedId = View.NO_ID;
+
+        for (int i = 0; i < labels.length; i++) {
+            AppCompatRadioButton rb = new AppCompatRadioButton(this);
+            rb.setId(View.generateViewId());
+            rb.setText(labels[i]);
+            rb.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+            rb.setTextColor(radioColors);
+            rb.setButtonTintList(radioColors);
+            rb.setPadding(dpToPx(6), dpToPx(10), dpToPx(6), dpToPx(10));
+
+            RadioGroup.LayoutParams lp = new RadioGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, dpToPx(6), 0, dpToPx(6));
+            rb.setLayoutParams(lp);
+            group.addView(rb);
+
             if (values[i].equals(current)) {
-                checked = i;
-                break;
+                checkedId = rb.getId();
             }
         }
-        new AlertDialog.Builder(this, R.style.DarkDialog)
-                .setTitle("Font")
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                    LauncherUiPrefs.setFont(this, values[which]);
-                    dialog.dismiss();
-                    recreate();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
+
+        if (checkedId != View.NO_ID) {
+            group.check(checkedId);
+        }
+
+        group.setOnCheckedChangeListener((g, id) -> {
+            int index = -1;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                if (g.getChildAt(i).getId() == id) {
+                    index = i;
+                    break;
+                }
+            }
+            if (index >= 0 && index < values.length) {
+                handler.onSelect(values[index]);
+                dialog.dismiss();
+            }
+        });
+
+        dialog.show();
     }
 
     private void updateSettingsSummaries() {
         TextView tvTheme = findViewById(R.id.tvThemeValue);
         TextView tvFontSize = findViewById(R.id.tvFontSizeValue);
-        TextView tvFont = findViewById(R.id.tvFontValue);
 
         if (tvTheme != null) {
             String theme = LauncherUiPrefs.getTheme(this);
@@ -1051,21 +1052,6 @@ public class LauncherActivity extends AppCompatActivity {
                 tvFontSize.setText("Large");
             } else {
                 tvFontSize.setText("Medium");
-            }
-        }
-
-        if (tvFont != null) {
-            String font = LauncherUiPrefs.getFont(this);
-            if (LauncherUiPrefs.FONT_MONOSPACE.equals(font)) {
-                tvFont.setText("Monospace");
-            } else if (LauncherUiPrefs.FONT_GOLDMAN.equals(font)) {
-                tvFont.setText("Goldman style");
-            } else if (LauncherUiPrefs.FONT_OPENDYSLEXIC.equals(font)) {
-                tvFont.setText("OpenDyslexic style");
-            } else if (LauncherUiPrefs.FONT_NDOT57.equals(font)) {
-                tvFont.setText("Ndot57 style");
-            } else {
-                tvFont.setText("Default");
             }
         }
     }

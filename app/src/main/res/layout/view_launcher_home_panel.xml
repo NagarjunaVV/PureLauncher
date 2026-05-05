@@ -99,7 +99,7 @@
                         android:id="@+id/btnReloadStats"
                         android:layout_width="40dp"
                         android:layout_height="40dp"
-                        android:background="@drawable/bg_icon_black"
+                        android:background="@drawable/bg_icon_surface"
                         android:contentDescription="Reload screen time"
                         android:padding="10dp"
                         android:src="@drawable/ic_refresh"
@@ -224,11 +224,11 @@
                 android:id="@+id/btnOpenCamera"
                 android:layout_width="42dp"
                 android:layout_height="42dp"
-                android:background="@drawable/bg_icon_white"
+                android:background="@drawable/bg_icon_surface"
                 android:contentDescription="Open camera app"
                 android:padding="8dp"
                 android:src="@drawable/ic_camera"
-                android:tint="@color/bg_primary" />
+                android:tint="@color/text_primary" />
 
         </LinearLayout>
 

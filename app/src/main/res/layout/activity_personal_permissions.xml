@@ -61,7 +61,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
                 android:text="Status: Required"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/text_on_white"
                 android:textStyle="bold"
                 android:textSize="14sp"
                 android:background="@drawable/bg_chip_dark"

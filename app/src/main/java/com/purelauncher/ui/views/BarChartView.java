@@ -8,6 +8,9 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
+
+import com.example.purelauncher.R;
 
 public class BarChartView extends View {
 
@@ -39,8 +42,8 @@ public class BarChartView extends View {
     }
 
     private void init() {
-        barPaint.setColor(0x88FFFFFF); // Faded
-        touchPaint.setColor(0xFFFFFFFF); // Solid
+        barPaint.setColor(ContextCompat.getColor(getContext(), R.color.chart_bar));
+        touchPaint.setColor(ContextCompat.getColor(getContext(), R.color.chart_bar_active));
     }
 
     public void setOnBarTouchListener(OnBarTouchListener listener) {
