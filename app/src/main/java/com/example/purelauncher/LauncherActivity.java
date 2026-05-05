@@ -523,6 +523,7 @@ public class LauncherActivity extends AppCompatActivity {
         TextView tvVaultAction = menuView.findViewById(R.id.tvVaultAction);
         tvVaultAction.setText(inVault ? "Remove from Vault" : "Add to Vault");
         int vaultToolsVisibility = inVault ? View.VISIBLE : View.GONE;
+        menuView.findViewById(R.id.divVaultTop).setVisibility(View.VISIBLE);
         menuView.findViewById(R.id.divFrictionTop).setVisibility(vaultToolsVisibility);
         menuView.findViewById(R.id.btnChangeFriction).setVisibility(vaultToolsVisibility);
         menuView.findViewById(R.id.divLimitTop).setVisibility(vaultToolsVisibility);

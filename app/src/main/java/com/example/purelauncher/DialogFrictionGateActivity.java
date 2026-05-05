@@ -91,10 +91,6 @@ public class DialogFrictionGateActivity extends AppCompatActivity {
                 launchApp();
             } else {
                 updateUI();
-                if (SessionPrefs.getRole(this) == SessionPrefs.Role.CHILD) {
-                    TelemetryLocalStore.incrementFriction(this);
-                    // Firestore sync removed as per request
-                }
             }
         });
     }
@@ -141,6 +137,9 @@ public class DialogFrictionGateActivity extends AppCompatActivity {
 
     private void launchApp() {
         VaultPrefs.incrementDailyClicks(this, packageName);
+        if (SessionPrefs.getRole(this) == SessionPrefs.Role.CHILD) {
+            TelemetryLocalStore.incrementFriction(this);
+        }
         VaultPrefs.setLastUnlockedPkg(this, packageName);
         Intent guardIntent = new Intent(this, AppUsageGuardService.class);
         guardIntent.putExtra("watchPackage", packageName);

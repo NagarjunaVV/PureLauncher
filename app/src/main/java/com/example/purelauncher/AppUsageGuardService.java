@@ -171,25 +171,36 @@ public class AppUsageGuardService extends Service {
 
     private String getTopPackageName() {
         UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+        if (usm == null) return activePackage;
         long now = System.currentTimeMillis();
-        UsageEvents events = usm.queryEvents(now - 60_000L, now);
-        String lastResumedPackage = null;
-        long lastResumedAt = 0L;
+        UsageEvents events = usm.queryEvents(now - 10 * 60_000L, now);
+        String foregroundPackage = activePackage == null ? "" : activePackage;
+        long lastForegroundAt = activePackageStartedAt;
         if (events != null) {
             UsageEvents.Event event = new UsageEvents.Event();
             while (events.hasNextEvent()) {
                 events.getNextEvent(event);
-                if (event.getEventType() == UsageEvents.Event.ACTIVITY_RESUMED
-                        && event.getTimeStamp() >= lastResumedAt) {
-                    lastResumedPackage = event.getPackageName();
-                    lastResumedAt = event.getTimeStamp();
+                int type = event.getEventType();
+                if ((type == UsageEvents.Event.ACTIVITY_RESUMED
+                        || type == UsageEvents.Event.MOVE_TO_FOREGROUND)
+                        && event.getTimeStamp() >= lastForegroundAt) {
+                    foregroundPackage = event.getPackageName();
+                    lastForegroundAt = event.getTimeStamp();
+                } else if ((type == UsageEvents.Event.ACTIVITY_PAUSED
+                        || type == UsageEvents.Event.ACTIVITY_STOPPED
+                        || type == UsageEvents.Event.MOVE_TO_BACKGROUND)
+                        && event.getPackageName() != null
+                        && event.getPackageName().equals(foregroundPackage)
+                        && event.getTimeStamp() >= lastForegroundAt) {
+                    foregroundPackage = "";
+                    lastForegroundAt = event.getTimeStamp();
                 }
             }
         }
-        if (lastResumedPackage != null) {
-            return lastResumedPackage;
+        if (foregroundPackage != null && !foregroundPackage.trim().isEmpty()) {
+            return foregroundPackage;
         }
-        // Look back 10 seconds to find usage events
+
         List<UsageStats> stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 60_000L, now);
         if (stats != null && !stats.isEmpty()) {
             SortedMap<Long, UsageStats> sortedStats = new TreeMap<>();
