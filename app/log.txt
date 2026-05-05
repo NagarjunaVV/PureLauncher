@@ -1,0 +1,97 @@
+--------- beginning of crash
+2026-05-04 14:27:08.112  9599-9599  AndroidRuntime          pid-9599                             E  FATAL EXCEPTION: main (Explain with AI)
+                                                                                                    Process: com.example.purelauncher, PID: 9599
+                                                                                                    java.lang.ClassCastException: com.google.android.material.textview.MaterialTextView cannot be cast to android.widget.ImageView
+                                                                                                    	at com.example.purelauncher.WidgetsAdapter$VH.<init>(WidgetsAdapter.java:85)
+                                                                                                    	at com.example.purelauncher.WidgetsAdapter.onCreateViewHolder(WidgetsAdapter.java:54)
+                                                                                                    	at com.example.purelauncher.WidgetsAdapter.onCreateViewHolder(WidgetsAdapter.java:19)
+                                                                                                    	at androidx.recyclerview.widget.RecyclerView$Adapter.createViewHolder(RecyclerView.java:7889)
+                                                                                                    	at androidx.recyclerview.widget.RecyclerView$Recycler.tryGetViewHolderForPositionByDeadline(RecyclerView.java:6969)
+                                                                                                    	at androidx.recyclerview.widget.RecyclerView$Recycler.getViewForPosition(RecyclerView.java:6853)
+                                                                                                    	at androidx.recyclerview.widget.RecyclerView$Recycler.getViewForPosition(RecyclerView.java:6849)
+                                                                                                    	at androidx.recyclerview.widget.LinearLayoutManager$LayoutState.next(LinearLayoutManager.java:2422)
+                                                                                                    	at androidx.recyclerview.widget.GridLayoutManager.layoutChunk(GridLayoutManager.java:1251)
+                                                                                                    	at androidx.recyclerview.widget.LinearLayoutManager.fill(LinearLayoutManager.java:1682)
+                                                                                                    	at androidx.recyclerview.widget.LinearLayoutManager.onLayoutChildren(LinearLayoutManager.java:747)
+                                                                                                    	at androidx.recyclerview.widget.GridLayoutManager.onLayoutChildren(GridLayoutManager.java:837)
+                                                                                                    	at androidx.recyclerview.widget.RecyclerView.dispatchLayoutStep2(RecyclerView.java:4737)
+                                                                                                    	at androidx.recyclerview.widget.RecyclerView.dispatchLayout(RecyclerView.java:4459)
+                                                                                                    	at androidx.recyclerview.widget.RecyclerView.onLayout(RecyclerView.java:5011)
+                                                                                                    	at android.view.View.layout(View.java:24006)
+                                                                                                    	at android.view.ViewGroup.layout(ViewGroup.java:6512)
+                                                                                                    	at android.widget.LinearLayout.setChildFrame(LinearLayout.java:1841)
+                                                                                                    	at android.widget.LinearLayout.layoutVertical(LinearLayout.java:1673)
+                                                                                                    	at android.widget.LinearLayout.onLayout(LinearLayout.java:1582)
+                                                                                                    	at android.view.View.layout(View.java:24006)
+                                                                                                    	at android.view.ViewGroup.layout(ViewGroup.java:6512)
+                                                                                                    	at android.widget.FrameLayout.layoutChildren(FrameLayout.java:332)
+                                                                                                    	at android.widget.FrameLayout.onLayout(FrameLayout.java:270)
+                                                                                                    	at android.view.View.layout(View.java:24006)
+                                                                                                    	at android.view.ViewGroup.layout(ViewGroup.java:6512)
+                                                                                                    	at androidx.constraintlayout.widget.ConstraintLayout.onLayout(ConstraintLayout.java:1961)
+                                                                                                    	at android.view.View.layout(View.java:24006)
+                                                                                                    	at android.view.ViewGroup.layout(ViewGroup.java:6512)
+                                                                                                    	at android.widget.FrameLayout.layoutChildren(FrameLayout.java:332)
+                                                                                                    	at android.widget.FrameLayout.onLayout(FrameLayout.java:270)
+                                                                                                    	at android.view.View.layout(View.java:24006)
+                                                                                                    	at android.view.ViewGroup.layout(ViewGroup.java:6512)
+                                                                                                    	at android.widget.LinearLayout.setChildFrame(LinearLayout.java:1841)
+                                                                                                    	at android.widget.LinearLayout.layoutVertical(LinearLayout.java:1673)
+                                                                                                    	at android.widget.LinearLayout.onLayout(LinearLayout.java:1582)
+                                                                                                    	at android.view.View.layout(View.java:24006)
+                                                                                                    	at android.view.ViewGroup.layout(ViewGroup.java:6512)
+                                                                                                    	at android.widget.FrameLayout.layoutChildren(FrameLayout.java:332)
+                                                                                                    	at android.widget.FrameLayout.onLayout(FrameLayout.java:270)
+                                                                                                    	at android.view.View.layout(View.java:24006)
+                                                                                                    	at android.view.ViewGroup.layout(ViewGroup.java:6512)
+                                                                                                    	at android.widget.LinearLayout.setChildFrame(LinearLayout.java:1841)
+                                                                                                    	at android.widget.LinearLayout.layoutVertical(LinearLayout.java:1673)
+                                                                                                    	at android.widget.LinearLayout.onLayout(LinearLayout.java:1582)
+                                                                                                    	at android.view.View.layout(View.java:24006)
+                                                                                                    	at android.view.ViewGroup.layout(ViewGroup.java:6512)
+                                                                                                    	at android.widget.FrameLayout.layoutChildren(FrameLayout.java:332)
+                                                                                                    	at android.widget.FrameLayout.onLayout(FrameLayout.java:270)
+                                                                                                    	at com.android.internal.policy.DecorView.onLayout(DecorView.java:870)
+                                                                                                    	at android.view.View.layout(View.java:24006)
+                                                                                                    	at android.view.ViewGroup.layout(ViewGroup.java:6512)
+                                                                                                    	at android.view.ViewRootImpl.performLayout(ViewRootImpl.java:4193)
+                                                                                                    	at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:3536)
+                                                                                                    	at android.view.ViewRootImpl.doTraversal(ViewRootImpl.java:2474)
+--------- beginning of system
+2026-05-04 14:41:10.328  1919-3916  AppOps                  pid-1919                             E  package com.example.purelauncher not found, can't check for attributionTag null
+2026-05-04 14:41:10.328  1919-3916  AppOps                  pid-1919                             E  Bad call made by uid 1000. Package "com.example.purelauncher" does not belong to uid 10406.
+2026-05-04 14:41:10.328  1919-3916  AppOps                  pid-1919                             E  noteOperation (Explain with AI)
+                                                                                                    java.lang.SecurityException: Specified package "com.example.purelauncher" under uid 10406 but it is not
+                                                                                                    	at com.android.server.appop.AppOpsService.verifyAndGetBypass(AppOpsService.java:4829)
+                                                                                                    	at com.android.server.appop.AppOpsService.noteOperationUnchecked(AppOpsService.java:3545)
+                                                                                                    	at com.android.server.appop.AppOpsService.noteOperationImpl(AppOpsService.java:3533)
+                                                                                                    	at com.android.server.appop.AppOpsService.-$$Nest$mnoteOperationImpl(Unknown Source:0)
+                                                                                                    	at com.android.server.appop.AppOpsService$CheckOpsDelegateDispatcher.lambda$noteOperation$4(AppOpsService.java:7839)
+                                                                                                    	at com.android.server.appop.AppOpsService$CheckOpsDelegateDispatcher$$ExternalSyntheticLambda4.apply(Unknown Source:33)
+                                                                                                    	at com.android.server.policy.AppOpsPolicy.noteOperation(AppOpsPolicy.java:225)
+                                                                                                    	at com.android.server.appop.AppOpsService$CheckOpsDelegateDispatcher.noteOperation(AppOpsService.java:7837)
+                                                                                                    	at com.android.server.appop.AppOpsService.noteOperation(AppOpsService.java:3517)
+                                                                                                    	at com.android.internal.app.IAppOpsService$Stub.onTransact(IAppOpsService.java:479)
+                                                                                                    	at android.os.Binder.execTransactInternal(Binder.java:1326)
+                                                                                                    	at android.os.Binder.execTransact(Binder.java:1268)
+2026-05-04 14:41:28.812  1919-2097  PackageMan...ilsExtImpl pid-1919                             E  Fix up user restrict data of pkg: com.example.purelauncher
+2026-05-04 14:41:29.155  1919-2097  ArtManagerService       pid-1919                             E  Failed to prepare profile for com.example.purelauncher:/data/app/~~fdAgMxqRQS6wpwaDPZL3Jw==/com.example.purelauncher-Q-81uTsWV1dKYdTLckhBPA==/base.apk
+2026-05-04 14:41:29.514  1919-2089  VerityUtils             pid-1919                             E  Failed to measure fs-verity, errno 1: /data/app/~~fdAgMxqRQS6wpwaDPZL3Jw==/com.example.purelauncher-Q-81uTsWV1dKYdTLckhBPA==/base.apk
+2026-05-04 14:41:31.150 25047-25047 Quality                 com.example.purelauncher             I  Skipped: true 21 cost 353.64374 refreshRate 16305678 bit true processName com.example.purelauncher
+2026-05-04 14:41:31.247 25047-25047 OplusCusto...ionManager com.example.purelauncher             E  sInstance is null, start a new sInstance
+2026-05-04 14:41:31.444 25047-25047 OplusInputMethodUtil    com.example.purelauncher             D  init sDebug to false, init sDebugIme to false, init sAlwaysOn to false
+2026-05-04 14:41:31.444 25047-25047 OplusInputMethodUtil    com.example.purelauncher             D  updateDebugToClass InputMethodManager.DEBUG = false
+2026-05-04 14:41:31.444 25047-25047 OplusInputMethodUtil    com.example.purelauncher             D  updateDebugToClass ImeFocusController.DEBUG = false
+2026-05-04 14:41:31.444 25047-25047 OplusInputMethodUtil    com.example.purelauncher             D  updateDebugToClass BaseInputConnection.DEBUG = false
+2026-05-04 14:41:31.444 25047-25047 OplusInputMethodUtil    com.example.purelauncher             D  updateDebugToClass ImeFocusController.sDebugIme = false
+2026-05-04 14:41:31.536 25047-25047 ZoomWindowDecorView     com.example.purelauncher             V  setLastReportedMergedConfiguration mZoomDisplayHeight: 2400 getDecorView.15522817
+2026-05-04 14:41:31.757 25047-25047 Quality                 com.example.purelauncher             I  Skipped: false 8 cost 149.53271 refreshRate 16666667 bit true processName com.example.purelauncher
+2026-05-04 14:41:31.869 25047-25047 Quality                 com.example.purelauncher             I  Skipped: false 2 cost 33.446224 refreshRate 16386239 bit true processName com.example.purelauncher
+2026-05-04 14:41:36.988 25047-25047 OplusInput...erInternal com.example.purelauncher             D  get inputMethodManager extension: com.android.internal.view.IInputMethodManager$Stub$Proxy@b92448f
+2026-05-04 14:41:37.113 25047-25047 Quality                 com.example.purelauncher             I  Skipped: false 7 cost 116.6505 refreshRate 16292804 bit true processName com.example.purelauncher
+2026-05-04 14:41:37.209 25047-25047 Quality                 com.example.purelauncher             I  Skipped: false 0 cost 10.865539 refreshRate 16666667 bit true processName com.example.purelauncher
+2026-05-04 14:41:37.226 25047-25047 ZoomWindowDecorView     com.example.purelauncher             V  setLastReportedMergedConfiguration mZoomDisplayHeight: 2400 getDecorView.134676821
+2026-05-04 14:41:37.302 25047-25047 Quality                 com.example.purelauncher             I  Skipped: false 4 cost 77.39168 refreshRate 16286162 bit true processName com.example.purelauncher
+2026-05-04 14:41:37.844 25047-25047 ZoomWindowDecorView     com.example.purelauncher             V  removeZoomView
+2026-05-04 14:41:40.248 25047-25047 Quality                 com.example.purelauncher             I  Skipped: true 1 cost 26.568544 refreshRate 16301576 bit true processName com.example.purelauncher
+2026-05-04 14:41:53.281 25047-25047 Quality                 com.example.purelauncher             I  Skipped: false 1 cost 28.223043 refreshRate 16294324 bit true processName com.example.purelauncher
