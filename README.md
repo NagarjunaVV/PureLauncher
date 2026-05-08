@@ -2,9 +2,47 @@
 
 PureLauncher is a role-based Android launcher and parent monitoring app built around a child launcher experience and a parent dashboard. The current codebase focuses on launcher control, vault friction, telemetry sync, and QR-based parent-child linking.
 
+## App Logo
+
+<p align="center">
+	<img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp" alt="PureLauncher logo" width="128" height="128" />
+</p>
+
 ## What Is Implemented
 
 The current build includes a child launcher with three tabs, a parent dashboard with Firestore-backed live updates, an app drawer for vaulting apps, a friction gate, usage analytics, and QR pairing.
+
+## Architecture At A Glance
+
+```mermaid
+flowchart TD
+	A[MainActivity] --> B[OnboardingActivity]
+	B --> C{Role selected}
+	C -->|Child| D[PersonalFeatureTourActivity]
+	D --> E[PersonalPermissionsActivity]
+	E --> F[AuthenticationActivity]
+	F --> G[LoginActivity]
+	G --> H[LauncherActivity]
+	H --> H1[Home tab]
+	H --> H2[Vault tab]
+	H --> H3[Settings tab]
+	H2 --> I[AppSearchActivity]
+	H2 --> J[DialogFrictionGateActivity]
+	H2 --> K[LimitReachedActivity]
+	H1 --> L[TelemetryRepository]
+	C -->|Parent| M[ParentFeatureTourActivity]
+	M --> N[LoginActivity / SignupActivity]
+	N --> O[ParentLinkChildActivity]
+	O --> P[ParentQrScannerActivity]
+	P --> Q[ActivityParentDashboardActivity]
+	Q --> Q1[Home tab]
+	Q --> Q2[Vault tab]
+	Q --> Q3[Settings tab]
+	Q1 --> R[SyncCoordinator]
+	Q1 --> S[UserProfileStore]
+	Q2 --> S
+	Q3 --> S
+```
 
 ## Main User Flows
 
@@ -102,10 +140,6 @@ The parent dashboard listens to Firestore collections so changes from the child 
 | `HashSet`                | `TelemetryRepository.java`, `SyncCoordinator.java`, `UserProfileStore.java`, `LauncherActivity.java`, `AppSearchActivity.java`, `ActivityParentDashboardActivity.java`                                  | Tracks unique package names such as vaulted apps or linked app state without duplicates.                     |
 | `Map` / `Set` interfaces | Most data layers                                                                                                                                                                                        | Used as the stable API for collection access even when the backing implementation is `HashMap` or `HashSet`. |
 | `Collections.sort`       | `TelemetryRepository.java`, `SyncCoordinator.java`, `LauncherActivity.java`, `ActivityParentDashboardActivity.java`                                                                                     | Sorts app lists alphabetically before showing them in the UI or syncing them to Firestore.                   |
-
-### Tree-Based Collections
-
-The current codebase does not use `TreeMap` or `TreeSet` directly. Sorted behavior is handled with `Collections.sort(...)` on `ArrayList` data instead of tree-backed collections.
 
 ### TelemetrySnapshot Fields
 
@@ -251,9 +285,3 @@ The current codebase does not use `TreeMap` or `TreeSet` directly. Sorted behavi
 ```
 
 Expected output: `BUILD SUCCESSFUL` and the APK under `app/build/outputs/apk/debug/`.
-
-## Notes
-
-- The README no longer describes widgets as implemented because the current codebase does not provide them.
-- The README no longer describes notification telemetry as implemented because the current codebase does not provide it.
-- The child launcher is intentionally split into Home, Vault, and Settings only.
