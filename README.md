@@ -93,6 +93,20 @@ The parent dashboard listens to Firestore collections so changes from the child 
 | `ActivityParentDashboardActivity.ParentVaultEntry` | `ActivityParentDashboardActivity.java` | Vault entry with friction, daily limit, and limit-change metadata.                   |
 | `LauncherActivity` vault/app lists                 | `LauncherActivity.java`                | Cached app lists for the child drawer and vault pages.                               |
 
+### Collection Usage By File
+
+| Collection Type          | Used In                                                                                                                                                                                                 | Purpose                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `ArrayList`              | `TelemetryRepository.java`, `SyncCoordinator.java`, `UserProfileStore.java`, `LauncherActivity.java`, `ActivityParentDashboardActivity.java`, `AppSearchActivity.java`, `ParentScreenTimeActivity.java` | Holds app lists, telemetry rows, Firestore payload rows, and adapter data before sorting or display.         |
+| `HashMap`                | `TelemetryRepository.java`, `SyncCoordinator.java`, `UserProfileStore.java`, `ActivityParentDashboardActivity.java`, `LauncherActivity.java`                                                            | Builds per-package aggregates, Firestore documents, lookup maps, and sync payloads.                          |
+| `HashSet`                | `TelemetryRepository.java`, `SyncCoordinator.java`, `UserProfileStore.java`, `LauncherActivity.java`, `AppSearchActivity.java`, `ActivityParentDashboardActivity.java`                                  | Tracks unique package names such as vaulted apps or linked app state without duplicates.                     |
+| `Map` / `Set` interfaces | Most data layers                                                                                                                                                                                        | Used as the stable API for collection access even when the backing implementation is `HashMap` or `HashSet`. |
+| `Collections.sort`       | `TelemetryRepository.java`, `SyncCoordinator.java`, `LauncherActivity.java`, `ActivityParentDashboardActivity.java`                                                                                     | Sorts app lists alphabetically before showing them in the UI or syncing them to Firestore.                   |
+
+### Tree-Based Collections
+
+The current codebase does not use `TreeMap` or `TreeSet` directly. Sorted behavior is handled with `Collections.sort(...)` on `ArrayList` data instead of tree-backed collections.
+
 ### TelemetrySnapshot Fields
 
 `TelemetrySnapshot` contains the values that are written into Firestore and shown in the UI:
