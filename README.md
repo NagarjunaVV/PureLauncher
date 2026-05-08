@@ -4,7 +4,7 @@ PureLauncher is a role-based Android launcher and parent monitoring app built ar
 
 ## What Is Implemented
 
-The current build includes a child launcher with three tabs, a parent dashboard with Firestore-backed live updates, an app drawer for vaulting apps, a friction gate, usage analytics, and QR pairing. App widgets are not implemented. Notification tracking is not implemented in the current codebase, so the README no longer describes it as an active feature.
+The current build includes a child launcher with three tabs, a parent dashboard with Firestore-backed live updates, an app drawer for vaulting apps, a friction gate, usage analytics, and QR pairing.
 
 ## Main User Flows
 
