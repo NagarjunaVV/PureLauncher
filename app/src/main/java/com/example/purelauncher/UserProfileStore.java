@@ -27,6 +27,9 @@ final class UserProfileStore {
     private static final String KEY_CREATED_AT = "createdAt";
     private static final String KEY_UPDATED_AT = "updatedAt";
 
+    // Session management key
+    private static final String KEY_ACTIVE_DEVICE_ID = "activeDeviceId";
+
     private final FirebaseFirestore firestore;
 
     UserProfileStore() {
@@ -56,6 +59,38 @@ final class UserProfileStore {
                 .get()
                 .addOnFailureListener(e -> Log.e(TAG, "Failed to fetch role", e))
                 .continueWith(task -> parseRole(task.getResult()));
+    }
+
+    /**
+     * Checks if there's an active session on another device and claims it if not.
+     * Blocks login if a device is already registered as active and it's not this one.
+     */
+    Task<Boolean> claimSession(String uid, String deviceId) {
+        DocumentReference ref = firestore.collection(COLLECTION_USERS).document(uid);
+        return firestore.runTransaction(transaction -> {
+            DocumentSnapshot snapshot = transaction.get(ref);
+            if (!snapshot.exists()) return true;
+
+            String activeDevice = snapshot.getString(KEY_ACTIVE_DEVICE_ID);
+
+            // If a different device is already active, refuse login.
+            if (activeDevice != null && !activeDevice.isEmpty() && !activeDevice.equals(deviceId)) {
+                return false; 
+            }
+
+            // Otherwise, set this device as active.
+            transaction.update(ref, KEY_ACTIVE_DEVICE_ID, deviceId);
+            return true;
+        });
+    }
+
+    /**
+     * Clears the active session so the account can be used on another device.
+     */
+    Task<Void> clearSession(String uid) {
+        if (uid == null) return Tasks.forResult(null);
+        return firestore.collection(COLLECTION_USERS).document(uid)
+                .update(KEY_ACTIVE_DEVICE_ID, FieldValue.delete());
     }
 
     Task<Void> setLinkedChildUid(FirebaseUser parentUser, String childUid) {

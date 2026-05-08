@@ -2,6 +2,7 @@ package com.example.purelauncher;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.util.Patterns;
 import android.view.View;
 import android.widget.Button;
@@ -105,8 +106,8 @@ public class LoginActivity extends AppCompatActivity {
 
     private void resolveRoleAndRoute() {
         profileStore.getRole(auth.getCurrentUser()).addOnCompleteListener(roleTask -> {
-            setLoading(false);
             if (!roleTask.isSuccessful()) {
+                setLoading(false);
                 showError("Login succeeded, but role check failed. Try again.");
                 auth.signOut();
                 return;
@@ -114,34 +115,45 @@ public class LoginActivity extends AppCompatActivity {
 
             SessionPrefs.Role serverRole = roleTask.getResult();
             if (serverRole == null) {
+                setLoading(false);
                 showError("Account role profile is missing. Please contact support.");
                 auth.signOut();
                 return;
             }
 
             SessionPrefs.Role localRole = SessionPrefs.getRole(this);
-
-            // STRICT role guard: child login page must not accept parent credentials
-            // and vice versa. Sign out immediately and show a clear error.
             if (localRole != null && localRole != serverRole) {
+                setLoading(false);
                 auth.signOut();
                 showError("Login failed: You are on the " + localRole + " setup page, but this account is registered as a " + serverRole + ".");
                 return;
             }
 
-            // Sync the role and proceed
-            SessionPrefs.setRole(this, serverRole);
-
-            if (serverRole == SessionPrefs.Role.PARENT) {
-                startActivity(new Intent(this, ParentLinkChildActivity.class));
-            } else {
-                SessionPrefs.setChildAuthComplete(this, true);
-                Intent intent = new Intent(this, SetupActivity.class);
-                intent.putExtra("next_activity", LauncherActivity.class.getName());
-                startActivity(intent);
-            }
-            finish();
+            // Session check for ALL accounts (Parent and Child)
+            String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+            profileStore.claimSession(auth.getUid(), deviceId).addOnCompleteListener(sessionTask -> {
+                setLoading(false);
+                if (sessionTask.isSuccessful() && Boolean.TRUE.equals(sessionTask.getResult())) {
+                    proceedToRoute(serverRole);
+                } else {
+                    auth.signOut();
+                    showError("This account is already active on another device.");
+                }
+            });
         });
+    }
+
+    private void proceedToRoute(SessionPrefs.Role serverRole) {
+        SessionPrefs.setRole(this, serverRole);
+        if (serverRole == SessionPrefs.Role.PARENT) {
+            startActivity(new Intent(this, ParentLinkChildActivity.class));
+        } else {
+            SessionPrefs.setChildAuthComplete(this, true);
+            Intent intent = new Intent(this, SetupActivity.class);
+            intent.putExtra("next_activity", LauncherActivity.class.getName());
+            startActivity(intent);
+        }
+        finish();
     }
 
     private void setLoading(boolean loading) {

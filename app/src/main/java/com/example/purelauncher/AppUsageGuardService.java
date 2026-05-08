@@ -14,6 +14,11 @@ import android.os.Looper;
 
 import androidx.annotation.Nullable;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -34,6 +39,7 @@ public class AppUsageGuardService extends Service {
     private String currentBlockPackage = "";
     private String scheduledLimitPackage = "";
     private long scheduledLimitAt = 0L;
+    private ListenerRegistration syncRequestListener;
     
     private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
         @Override
@@ -58,6 +64,43 @@ public class AppUsageGuardService extends Service {
         super.onCreate();
         IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
         registerReceiver(screenReceiver, filter);
+        startSyncRequestListener();
+    }
+
+    private void startSyncRequestListener() {
+        if (syncRequestListener != null) {
+            return;
+        }
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            return;
+        }
+        syncRequestListener = FirebaseFirestore.getInstance()
+                .collection("sync_requests")
+                .document(user.getUid())
+                .addSnapshotListener((snapshot, error) -> {
+                    if (error != null || snapshot == null || !snapshot.exists()) {
+                        return;
+                    }
+                    String requestId = snapshot.getString("requestId");
+                    if (requestId == null || requestId.trim().isEmpty()) {
+                        return;
+                    }
+                    if (!SyncCoordinator.isOnline(this)) {
+                        return;
+                    }
+                    if (requestId.equals(SyncCoordinator.getLastSyncRequestId(this))) {
+                        return;
+                    }
+                    SyncCoordinator.syncToFirestore(this, requestId);
+                });
+    }
+
+    private void stopSyncRequestListener() {
+        if (syncRequestListener != null) {
+            syncRequestListener.remove();
+            syncRequestListener = null;
+        }
     }
 
     @Override
@@ -235,6 +278,7 @@ public class AppUsageGuardService extends Service {
     public void onDestroy() {
         unregisterReceiver(screenReceiver);
         handler.removeCallbacks(monitorRunnable);
+        stopSyncRequestListener();
         super.onDestroy();
     }
 

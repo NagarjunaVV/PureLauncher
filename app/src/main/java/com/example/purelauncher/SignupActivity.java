@@ -2,6 +2,7 @@ package com.example.purelauncher;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Patterns;
@@ -177,26 +178,35 @@ public class SignupActivity extends AppCompatActivity {
             }
 
             profileStore.createProfile(currentUser, displayName, role).addOnCompleteListener(storeTask -> {
-                setLoading(false);
                 if (!storeTask.isSuccessful()) {
+                    setLoading(false);
                     showError("Account created, but role setup failed. Please try logging in again.");
                     return;
                 }
 
-                if (role == SessionPrefs.Role.PARENT) {
-                    Intent intent = new Intent(this, ParentLinkChildActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    startActivity(intent);
-                } else {
-                    SessionPrefs.setChildAuthComplete(this, true);
-                    Intent intent = new Intent(this, SetupActivity.class);
-                    intent.putExtra("next_activity", LauncherActivity.class.getName());
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    startActivity(intent);
-                }
-                finish();
+                // Initialize session for Child or Parent
+                String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+                profileStore.claimSession(currentUser.getUid(), deviceId).addOnCompleteListener(sessionTask -> {
+                    setLoading(false);
+                    proceedToRoute(role);
+                });
             });
         });
+    }
+
+    private void proceedToRoute(SessionPrefs.Role role) {
+        if (role == SessionPrefs.Role.PARENT) {
+            Intent intent = new Intent(this, ParentLinkChildActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+        } else {
+            SessionPrefs.setChildAuthComplete(this, true);
+            Intent intent = new Intent(this, SetupActivity.class);
+            intent.putExtra("next_activity", LauncherActivity.class.getName());
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+        }
+        finish();
     }
 
     private void setLoading(boolean loading) {

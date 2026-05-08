@@ -46,16 +46,19 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.firestore.SetOptions;
 import com.google.firebase.firestore.WriteBatch;
 import com.purelauncher.ui.views.BarChartView;
 
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
@@ -67,9 +70,7 @@ import java.util.Set;
 
 public class LauncherActivity extends AppCompatActivity {
 
-    private static final String COLLECTION_SYNC_REQUESTS = "sync_requests";
     private static final String PREFS_SYNC = "child_sync_prefs";
-    private static final String KEY_LAST_SYNC_REQUEST_ID = "last_sync_request_id";
 
     private static final int PAGE_HOME = 0, PAGE_VAULT = 1, PAGE_SETTINGS = 2;
 
@@ -92,7 +93,8 @@ public class LauncherActivity extends AppCompatActivity {
     };
 
     private final TelemetryRepository repo = new TelemetryRepository();
-    // profileStore kept for auth state routing but cloud sync features removed
+    private final UserProfileStore profileStore = new UserProfileStore();
+    private ListenerRegistration parentManagedListener;
 
     private int currentPage = PAGE_HOME;
     private boolean navExpanded = false;
@@ -129,9 +131,32 @@ public class LauncherActivity extends AppCompatActivity {
     private boolean[] vaultLetterHasApps;
     private int vaultLastSelectedIndex = -1;
     private boolean isVaultSearchActive = false;
+    private android.widget.ProgressBar vaultLoadingBar;
 
     private int navIconPadding = 0;
-    private ListenerRegistration syncRequestListener;
+    private boolean isParentManaged = false;
+    private final android.content.BroadcastReceiver syncCompleteReceiver = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(android.content.Context context, android.content.Intent intent) {
+            if (SyncCoordinator.ACTION_SYNC_START.equals(intent.getAction())) {
+                if (vaultLoadingBar != null) {
+                    vaultLoadingBar.setVisibility(View.VISIBLE);
+                }
+            } else if (SyncCoordinator.ACTION_SYNC_COMPLETE.equals(intent.getAction())) {
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    if (vaultLoadingBar != null) {
+                        vaultLoadingBar.setVisibility(View.GONE);
+                    }
+                    Intent restartIntent = new Intent(LauncherActivity.this, LauncherActivity.class);
+                    restartIntent.putExtra("openVault", currentPage == PAGE_VAULT);
+                    restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(restartIntent);
+                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+                    finish();
+                }, 3000);
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -203,11 +228,23 @@ public class LauncherActivity extends AppCompatActivity {
             finish();
             return;
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            android.content.IntentFilter filter = new android.content.IntentFilter();
+            filter.addAction(SyncCoordinator.ACTION_SYNC_START);
+            filter.addAction(SyncCoordinator.ACTION_SYNC_COMPLETE);
+            registerReceiver(syncCompleteReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            android.content.IntentFilter filter = new android.content.IntentFilter();
+            filter.addAction(SyncCoordinator.ACTION_SYNC_START);
+            filter.addAction(SyncCoordinator.ACTION_SYNC_COMPLETE);
+            registerReceiver(syncCompleteReceiver, filter);
+        }
         startClockUpdates();
         startMetricsUpdates();
-        startSyncRequestListener();
+        refreshParentManagedState();
+        startParentManagedStateListener();
         blockNotificationShade();
-        reloadDrawerApps();
+        reloadDrawerApps(null);
         refreshVaultPage();
         bindMetrics(); // Refresh local stats
     }
@@ -230,172 +267,54 @@ public class LauncherActivity extends AppCompatActivity {
         super.onPause();
         clock.removeCallbacks(tick);
         clock.removeCallbacks(metricsTick);
-        stopSyncRequestListener();
+        unregisterReceiver(syncCompleteReceiver);
     }
 
-    private void startSyncRequestListener() {
-        if (syncRequestListener != null) {
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (parentManagedListener != null) {
+            parentManagedListener.remove();
+            parentManagedListener = null;
+        }
+    }
+
+    private void refreshParentManagedState() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            isParentManaged = false;
+            return;
+        }
+        profileStore.getLinkedParentUid(user).addOnSuccessListener(uid -> {
+            isParentManaged = uid != null && !uid.trim().isEmpty();
+        });
+    }
+
+    private void startParentManagedStateListener() {
+        if (parentManagedListener != null) {
             return;
         }
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) {
+        if (user == null || SessionPrefs.getRole(this) != SessionPrefs.Role.CHILD) {
             return;
         }
-        syncRequestListener = FirebaseFirestore.getInstance()
-                .collection(COLLECTION_SYNC_REQUESTS)
+        parentManagedListener = FirebaseFirestore.getInstance()
+                .collection("users")
                 .document(user.getUid())
                 .addSnapshotListener((snapshot, error) -> {
-                    if (error != null || snapshot == null || !snapshot.exists()) {
+                    if (error != null) {
                         return;
                     }
-                    handleSyncRequest(snapshot);
+                    boolean managed = snapshot != null
+                            && snapshot.exists()
+                            && snapshot.getString("linkedParentUid") != null
+                            && !snapshot.getString("linkedParentUid").trim().isEmpty();
+                    boolean changed = isParentManaged != managed;
+                    isParentManaged = managed;
+                    if (changed && !managed) {
+                        dismissContextMenuOverlay();
+                    }
                 });
-    }
-
-    private void stopSyncRequestListener() {
-        if (syncRequestListener != null) {
-            syncRequestListener.remove();
-            syncRequestListener = null;
-        }
-    }
-
-    private void handleSyncRequest(DocumentSnapshot snapshot) {
-        String requestId = snapshot.getString("requestId");
-        if (requestId == null || requestId.trim().isEmpty()) {
-            return;
-        }
-        if (!isOnline()) {
-            return;
-        }
-        if (requestId.equals(getLastSyncRequestId())) {
-            return;
-        }
-        syncToFirestore(requestId);
-    }
-
-    private void syncToFirestore(String requestId) {
-        new Thread(() -> {
-            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-            if (user == null) {
-                return;
-            }
-            TelemetrySnapshot local = repo.collectLocalSnapshot(this);
-            List<AppSearchActivity.AppEntry> apps = loadApps(false);
-            Set<String> vaulted = VaultPrefs.getVaultedPackages(this);
-
-            FirebaseFirestore db = FirebaseFirestore.getInstance();
-            String uid = user.getUid();
-            WriteBatch batch = db.batch();
-
-            DocumentReference metricsRef = db.collection("child_metrics").document(uid);
-            Map<String, Object> metrics = buildMetricsMap(local);
-            batch.set(metricsRef, metrics, SetOptions.merge());
-
-            for (AppSearchActivity.AppEntry app : apps) {
-                if (app == null || app.packageName == null) {
-                    continue;
-                }
-                DocumentReference appRef = db.collection("child_apps")
-                        .document(uid)
-                        .collection("apps")
-                        .document(app.packageName);
-                Map<String, Object> data = new HashMap<>();
-                data.put("name", app.label == null ? app.packageName : app.label);
-                data.put("packageName", app.packageName);
-                batch.set(appRef, data, SetOptions.merge());
-            }
-
-            PackageManager pm = getPackageManager();
-            for (String pkg : vaulted) {
-                if (pkg == null || pkg.trim().isEmpty()) {
-                    continue;
-                }
-                DocumentReference vaultRef = db.collection("child_vault")
-                        .document(uid)
-                        .collection("apps")
-                        .document(pkg);
-                Map<String, Object> data = new HashMap<>();
-                data.put("name", getLabelForPackage(pm, pkg));
-                data.put("friction", VaultPrefs.getFrictionType(this, pkg));
-                data.put("dailyLimitMinutes", VaultPrefs.getAppLimitMinutes(this, pkg));
-                batch.set(vaultRef, data, SetOptions.merge());
-            }
-
-            DocumentReference requestRef = db.collection(COLLECTION_SYNC_REQUESTS).document(uid);
-            Map<String, Object> ack = new HashMap<>();
-            ack.put("lastSyncedAt", FieldValue.serverTimestamp());
-            ack.put("lastSyncedRequestId", requestId);
-            batch.set(requestRef, ack, SetOptions.merge());
-
-            batch.commit().addOnSuccessListener(aVoid -> saveLastSyncRequestId(requestId));
-        }).start();
-    }
-
-    private Map<String, Object> buildMetricsMap(TelemetrySnapshot local) {
-        Map<String, Object> data = new HashMap<>();
-        long screenMinutes = 0L;
-        if (local != null && local.dailyUsageMinutes.length > 0) {
-            screenMinutes = local.dailyUsageMinutes[local.dailyUsageMinutes.length - 1];
-        }
-        data.put("screenTimeMinutes", screenMinutes);
-        data.put("unlockCount", local == null ? 0 : local.unlockCount);
-        data.put("frictionCount", local == null ? 0 : local.frictionCount);
-        data.put("vaultedCount", local == null ? 0 : local.vaultedCount);
-        data.put("dailyUsageMinutes", toLongList(local == null ? new long[0] : local.dailyUsageMinutes));
-        data.put("lastUpdated", FieldValue.serverTimestamp());
-        return data;
-    }
-
-    private List<Long> toLongList(long[] values) {
-        List<Long> out = new ArrayList<>();
-        if (values == null) {
-            return out;
-        }
-        for (long v : values) {
-            out.add(v);
-        }
-        return out;
-    }
-
-    private String getLastSyncRequestId() {
-        SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
-        return prefs.getString(KEY_LAST_SYNC_REQUEST_ID, "");
-    }
-
-    private void saveLastSyncRequestId(String requestId) {
-        SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
-        prefs.edit().putString(KEY_LAST_SYNC_REQUEST_ID, requestId).apply();
-    }
-
-    private boolean isOnline() {
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-        if (cm == null) {
-            return false;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            android.net.Network nw = cm.getActiveNetwork();
-            if (nw == null) {
-                return false;
-            }
-            NetworkCapabilities caps = cm.getNetworkCapabilities(nw);
-            return caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
-        }
-        // noinspection deprecation
-        NetworkInfo info = cm.getActiveNetworkInfo();
-        // noinspection deprecation
-        return info != null && info.isConnected();
-    }
-
-    private String getLabelForPackage(PackageManager pm, String pkg) {
-        try {
-            ApplicationInfo info = pm.getApplicationInfo(pkg, 0);
-            CharSequence label = pm.getApplicationLabel(info);
-            return label == null ? pkg : label.toString();
-        } catch (PackageManager.NameNotFoundException ignored) {
-            return pkg;
-        }
     }
 
     @Override
@@ -545,7 +464,7 @@ public class LauncherActivity extends AppCompatActivity {
             }
         });
 
-        reloadDrawerApps();
+        reloadDrawerApps(null);
     }
 
     private void buildDrawerLetterSidebar() {
@@ -641,7 +560,7 @@ public class LauncherActivity extends AppCompatActivity {
         tv.animate().scaleX(1f).scaleY(1f).setDuration(80).start();
     }
 
-    private void reloadDrawerApps() {
+    private void reloadDrawerApps(Runnable onComplete) {
         new Thread(() -> {
             List<AppSearchActivity.AppEntry> loadedApps = loadApps(true);
             runOnUiThread(() -> {
@@ -655,6 +574,9 @@ public class LauncherActivity extends AppCompatActivity {
                 if (!drawerSidebarBuilt) {
                     buildDrawerLetterSidebar();
                     drawerSidebarBuilt = true;
+                }
+                if (onComplete != null) {
+                    onComplete.run();
                 }
             });
         }).start();
@@ -738,17 +660,30 @@ public class LauncherActivity extends AppCompatActivity {
         menuView.findViewById(R.id.divAppInfoTop).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
         menuView.findViewById(R.id.btnAppInfo).setVisibility(vaultOnly ? View.GONE : View.VISIBLE);
 
-        menuView.findViewById(R.id.btnToggleVault).setOnClickListener(v -> {
-            if (inVault)
-                VaultPrefs.removeVaultedPackage(this, app.packageName);
-            else
-                VaultPrefs.addVaultedPackage(this, app.packageName);
-            drawerSidebarBuilt = false;
-            reloadDrawerApps();
-            refreshVaultPage();
-            bindMetrics();
-            dismissContextMenuOverlay();
-        });
+        View btnToggleVault = menuView.findViewById(R.id.btnToggleVault);
+        View btnChangeFriction = menuView.findViewById(R.id.btnChangeFriction);
+        View btnAppLimit = menuView.findViewById(R.id.btnAppLimit);
+
+        if (isParentManaged) {
+            setManagedByParent(btnToggleVault);
+            setManagedByParent(btnChangeFriction);
+            setManagedByParent(btnAppLimit);
+        } else {
+            if (btnToggleVault != null) {
+                btnToggleVault.setOnClickListener(v -> {
+                    if (inVault)
+                        VaultPrefs.removeVaultedPackage(this, app.packageName);
+                    else
+                        VaultPrefs.addVaultedPackage(this, app.packageName);
+                    drawerSidebarBuilt = false;
+                    reloadDrawerApps(() -> {
+                        refreshVaultPage();
+                        bindMetrics();
+                    });
+                    dismissContextMenuOverlay();
+                });
+            }
+        }
 
         menuView.findViewById(R.id.btnAppInfo).setOnClickListener(v -> {
             startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -756,15 +691,17 @@ public class LauncherActivity extends AppCompatActivity {
             dismissContextMenuOverlay();
         });
 
-        menuView.findViewById(R.id.btnChangeFriction).setOnClickListener(v -> {
-            dismissContextMenuOverlay();
-            showFrictionPicker(app);
-        });
+        if (!isParentManaged) {
+            menuView.findViewById(R.id.btnChangeFriction).setOnClickListener(v -> {
+                dismissContextMenuOverlay();
+                showFrictionPicker(app);
+            });
 
-        menuView.findViewById(R.id.btnAppLimit).setOnClickListener(v -> {
-            dismissContextMenuOverlay();
-            showLimitPicker(app);
-        });
+            menuView.findViewById(R.id.btnAppLimit).setOnClickListener(v -> {
+                dismissContextMenuOverlay();
+                showLimitPicker(app);
+            });
+        }
 
         ViewGroup overlayParent = drawerOpen && appDrawerSheet instanceof ViewGroup
                 ? (ViewGroup) appDrawerSheet
@@ -793,6 +730,49 @@ public class LauncherActivity extends AppCompatActivity {
                 }
             }).start();
         }
+    }
+
+    private void setManagedByParent(View target) {
+        if (target == null) {
+            return;
+        }
+        target.setAlpha(0.4f);
+        target.setOnClickListener(v -> {
+            dismissContextMenuOverlay();
+            showManagedByParentWarning();
+        });
+    }
+
+    private void showManagedByParentWarning() {
+        showStyledWarningDialog("Managed by parent", "This action is managed by your parent.");
+    }
+
+    private void showStyledWarningDialog(String title, String message) {
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_logout, null);
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
+
+        TextView tvTitle = view.findViewById(R.id.tvDialogTitle);
+        TextView tvMessage = view.findViewById(R.id.tvDialogMessage);
+        Button btnCancel = view.findViewById(R.id.btnCancel);
+        Button btnAccept = view.findViewById(R.id.btnAccept);
+
+        if (tvTitle != null) {
+            tvTitle.setText(title);
+        }
+        if (tvMessage != null) {
+            tvMessage.setText(message);
+        }
+        if (btnCancel != null) {
+            btnCancel.setVisibility(View.GONE);
+        }
+        if (btnAccept != null) {
+            btnAccept.setText("OK");
+            btnAccept.setOnClickListener(v -> dialog.dismiss());
+        }
+
+        dialog.show();
     }
 
     // ── Vault ─────────────────────────────────────────────────────────────────
@@ -835,6 +815,26 @@ public class LauncherActivity extends AppCompatActivity {
         }
 
         vaultLetterBubble = pageVault.findViewById(R.id.tvVaultLetterBubble);
+
+        if (pageVault instanceof ViewGroup) {
+            vaultLoadingBar = new android.widget.ProgressBar(this);
+            vaultLoadingBar.setIndeterminate(true);
+            vaultLoadingBar.setVisibility(View.GONE);
+            if (pageVault instanceof androidx.constraintlayout.widget.ConstraintLayout) {
+                int size = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 48,
+                        getResources().getDisplayMetrics());
+                androidx.constraintlayout.widget.ConstraintLayout.LayoutParams lp = new androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(
+                        size, size);
+                lp.bottomToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID;
+                lp.topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID;
+                lp.startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID;
+                lp.endToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID;
+                ((ViewGroup) pageVault).addView(vaultLoadingBar, lp);
+            } else {
+                ((ViewGroup) pageVault).addView(vaultLoadingBar);
+            }
+        }
+
         refreshVaultPage();
     }
 
@@ -948,11 +948,8 @@ public class LauncherActivity extends AppCompatActivity {
 
     private void showLimitPicker(AppSearchActivity.AppEntry app) {
         if (!VaultPrefs.canChangeLimitToday(this, app.packageName)) {
-            new AlertDialog.Builder(this, R.style.DarkDialog)
-                    .setTitle("Limit already set")
-                    .setMessage("App limit can only be changed once a day. Please try again tomorrow.")
-                    .setPositiveButton("OK", null)
-                    .show();
+            showStyledWarningDialog("Limit already set",
+                    "App limit can only be changed once a day. Please try again tomorrow.");
             return;
         }
 
@@ -1255,6 +1252,10 @@ public class LauncherActivity extends AppCompatActivity {
         }
         if (btnAccept != null) {
             btnAccept.setOnClickListener(v -> {
+                FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+                if (user != null && SessionPrefs.getRole(this) == SessionPrefs.Role.CHILD) {
+                    profileStore.clearSession(user.getUid());
+                }
                 FirebaseAuth.getInstance().signOut();
                 SessionPrefs.setChildAuthComplete(this, false);
                 SessionPrefs.setPersonalPermissionsComplete(this, false);

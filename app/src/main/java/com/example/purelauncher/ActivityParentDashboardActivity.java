@@ -10,8 +10,10 @@ import android.os.Looper;
 import android.content.SharedPreferences;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewConfiguration;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -34,11 +36,14 @@ import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
+import java.time.LocalDate;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class ActivityParentDashboardActivity extends AppCompatActivity {
 
@@ -47,8 +52,14 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
     private static final int PAGE_SETTINGS = 2;
     private static final String COLLECTION_SYNC_REQUESTS = "sync_requests";
     private static final String PREFS_SYNC = "parent_sync_prefs";
-    private static final String KEY_LAST_SYNC_REQUEST_AT = "last_sync_request_at";
-    private static final long SYNC_COOLDOWN_MS = 60L * 60L * 1000L;
+    private static final String KEY_LAST_RELOAD_SYNC_REQUEST_AT = "last_reload_sync_request_at";
+    private static final String KEY_LAST_UPDATE_SYNC_REQUEST_AT = "last_update_sync_request_at";
+    private static final long SYNC_COOLDOWN_MS = 10L * 1000L;
+
+    private enum SyncAction {
+        RELOAD,
+        UPDATE
+    }
 
     private View pageHome;
     private View pageVault;
@@ -59,12 +70,22 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
     private boolean navExpanded = false;
     private int navIconPadding = 0;
 
+    private View btnUpdate;
+    private boolean pendingChanges = false;
+    private String linkedChildUid;
+    private TextView homeScreenTime;
+    private BarChartView homeChart;
+    private long latestScreenTimeMinutes = 0L;
+    private long[] latestDailyUsageMinutes = new long[0];
+    private int selectedHomeBarIndex = -1;
+
     private View vaultEmptyState;
     private View vaultListContainer;
 
     private RecyclerView vaultRecycler;
     private ParentAppTextAdapter vaultAdapter;
-    private final List<String> vaultAllApps = new ArrayList<>();
+    private final List<ParentVaultEntry> vaultAllApps = new ArrayList<>();
+    private final Set<String> vaultedPackages = new HashSet<>();
     private EditText vaultSearch;
 
     private View parentDrawerSheet;
@@ -73,7 +94,7 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
     private EditText drawerSearch;
     private float screenH;
     private boolean drawerOpen = false;
-    private final List<String> drawerApps = new ArrayList<>();
+    private final List<ParentAppEntry> drawerApps = new ArrayList<>();
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final UserProfileStore profileStore = new UserProfileStore();
@@ -100,6 +121,7 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         navVault = findViewById(R.id.navVault);
         navSettings = findViewById(R.id.navSettings);
         parentDrawerSheet = findViewById(R.id.parentAppDrawerSheet);
+        btnUpdate = findViewById(R.id.btnParentUpdate);
 
         android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(dm);
@@ -113,6 +135,7 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         setupSettingsPage();
         setupBottomNav();
         setupDrawer();
+        setupUpdateButton();
 
         showPage(PAGE_HOME);
         startChildSync();
@@ -132,33 +155,37 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        updateUpdateButtonState();
+    }
+
     private void setupHomeCard() {
         View stats = findViewById(R.id.cardStats);
         if (stats != null) {
-            stats.setOnClickListener(v -> startActivity(new Intent(this, ScreenTimeActivity.class)));
+            stats.setOnClickListener(v -> startActivity(new Intent(this, ParentScreenTimeActivity.class)));
         }
 
         View reload = findViewById(R.id.btnReloadStats);
         if (reload != null) {
             reload.setOnClickListener(v -> {
-                requestChildSyncFromUi();
+                requestChildSyncFromUi(SyncAction.RELOAD, false);
                 v.animate().rotationBy(360f).setDuration(350).start();
             });
         }
 
         TextView monitoring = findViewById(R.id.tvMonitoring);
-        TextView screenTime = findViewById(R.id.tvScreenTime);
+        homeScreenTime = findViewById(R.id.tvScreenTime);
         TextView unlocks = findViewById(R.id.tvUnlockCount);
         TextView friction = findViewById(R.id.tvFrictionCount);
         TextView vaulted = findViewById(R.id.tvVaultedCount);
-        BarChartView chart = findViewById(R.id.barChart);
+        homeChart = findViewById(R.id.barChart);
 
         if (monitoring != null) {
-            monitoring.setText("Monitoring: Offline Mode");
+            monitoring.setVisibility(View.GONE);
         }
-        if (screenTime != null) {
-            screenTime.setText("0h 00m");
-        }
+        renderHomeScreenTime();
         if (unlocks != null) {
             unlocks.setText("0");
         }
@@ -168,14 +195,27 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         if (vaulted != null) {
             vaulted.setText("0");
         }
-        if (chart != null) {
-            chart.setSamples(new float[]{0.1f, 0.1f, 0.1f, 0.1f, 0.1f, 0.1f, 0.1f});
+        if (homeChart != null) {
+            homeChart.setSamples(new float[] { 0.1f, 0.1f, 0.1f, 0.1f, 0.1f, 0.1f, 0.1f });
+            homeChart.setOnBarTouchListener(new BarChartView.OnBarTouchListener() {
+                @Override
+                public void onBarTouch(int index, float value) {
+                    selectedHomeBarIndex = index;
+                    renderHomeScreenTime();
+                }
+
+                @Override
+                public void onBarRelease() {
+                    selectedHomeBarIndex = -1;
+                    renderHomeScreenTime();
+                }
+            });
         }
     }
 
     private void setupVaultPage() {
         vaultRecycler = findViewById(R.id.rvParentVaultApps);
-        vaultSearch = findViewById(R.id.etVaultSearch);
+        vaultSearch = null;
         vaultEmptyState = findViewById(R.id.vaultEmptyState);
         vaultListContainer = findViewById(R.id.vaultListContainer);
         if (vaultRecycler == null) {
@@ -184,18 +224,12 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
 
         vaultRecycler.setLayoutManager(new LinearLayoutManager(this));
         vaultAdapter = new ParentAppTextAdapter();
+        vaultAdapter.setOnItemLongClickListener(item -> {
+            if (item instanceof ParentVaultEntry) {
+                showVaultOptions((ParentVaultEntry) item);
+            }
+        });
         vaultRecycler.setAdapter(vaultAdapter);
-
-        if (vaultSearch != null) {
-            vaultSearch.addTextChangedListener(new TextWatcher() {
-                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-                @Override public void afterTextChanged(Editable s) {}
-                @Override
-                public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    filterVaultApps(s == null ? "" : s.toString());
-                }
-            });
-        }
 
         View add = findViewById(R.id.btnAddVault);
         if (add != null) {
@@ -218,7 +252,7 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
 
         View remove = findViewById(R.id.rowRemoveLink);
         if (remove != null) {
-            remove.setOnClickListener(v -> unlinkAndReturnToLogin());
+            remove.setOnClickListener(v -> showRemoveLinkDialog());
         }
 
         View rowLogout = findViewById(R.id.rowLogout);
@@ -242,6 +276,31 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         if (navSettings != null) {
             navSettings.setOnClickListener(v -> navClick(PAGE_SETTINGS));
         }
+    }
+
+    private void setupUpdateButton() {
+        if (btnUpdate == null) {
+            return;
+        }
+        btnUpdate.setOnClickListener(v -> requestChildSyncFromUi(SyncAction.UPDATE, true));
+        updateUpdateButtonState();
+    }
+
+    private void setPendingChanges(boolean pending) {
+        pendingChanges = pending;
+        updateUpdateButtonState();
+    }
+
+    private void updateUpdateButtonState() {
+        if (btnUpdate == null) {
+            return;
+        }
+        boolean hasVaultedApps = !vaultAllApps.isEmpty();
+        boolean canSync = canRequestSync(SyncAction.UPDATE);
+        boolean enabled = pendingChanges && hasVaultedApps && canSync;
+        btnUpdate.setVisibility(hasVaultedApps ? View.VISIBLE : View.GONE);
+        btnUpdate.setEnabled(enabled);
+        btnUpdate.setAlpha(enabled ? 1f : 0.4f);
     }
 
     private void navClick(int page) {
@@ -340,17 +399,25 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         drawerRecycler = parentDrawerSheet.findViewById(R.id.rvParentDrawerApps);
         drawerSearch = parentDrawerSheet.findViewById(R.id.etParentDrawerSearch);
         View close = parentDrawerSheet.findViewById(R.id.ivParentDrawerClose);
+        View dragHandle = parentDrawerSheet.findViewById(R.id.drawerHandle);
 
         if (drawerRecycler != null) {
             drawerRecycler.setLayoutManager(new LinearLayoutManager(this));
             drawerAdapter = new ParentAppTextAdapter();
+            drawerAdapter.setOnItemLongClickListener(this::showAddToVaultMenu);
             drawerRecycler.setAdapter(drawerAdapter);
         }
 
         if (drawerSearch != null) {
             drawerSearch.addTextChangedListener(new TextWatcher() {
-                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-                @Override public void afterTextChanged(Editable s) {}
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                }
+
+                @Override
+                public void afterTextChanged(Editable s) {
+                }
+
                 @Override
                 public void onTextChanged(CharSequence s, int start, int before, int count) {
                     filterDrawerApps(s == null ? "" : s.toString());
@@ -360,6 +427,31 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
 
         if (close != null) {
             close.setOnClickListener(v -> closeDrawer());
+        }
+
+        if (dragHandle != null) {
+            final float dragThreshold = ViewConfiguration.get(this).getScaledTouchSlop() * 6f;
+            final float[] startY = { -1f };
+            dragHandle.setOnTouchListener((v, event) -> {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startY[0] = event.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        if (startY[0] >= 0f && event.getRawY() - startY[0] > dragThreshold) {
+                            startY[0] = -1f;
+                            closeDrawer();
+                            return true;
+                        }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        startY[0] = -1f;
+                        return true;
+                    default:
+                        return false;
+                }
+            });
         }
     }
 
@@ -401,14 +493,13 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
             return;
         }
         String q = query == null ? "" : query.trim().toLowerCase(Locale.getDefault());
-        if (q.isEmpty()) {
-            drawerAdapter.setItems(drawerApps);
-            return;
-        }
-        List<String> filtered = new ArrayList<>();
-        for (String name : drawerApps) {
-            if (name.toLowerCase(Locale.getDefault()).contains(q)) {
-                filtered.add(name);
+        List<ParentAppEntry> filtered = new ArrayList<>();
+        for (ParentAppEntry app : drawerApps) {
+            if (vaultedPackages.contains(app.packageName)) {
+                continue;
+            }
+            if (q.isEmpty() || app.name.toLowerCase(Locale.getDefault()).contains(q)) {
+                filtered.add(app);
             }
         }
         drawerAdapter.setItems(filtered);
@@ -424,17 +515,23 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         }
     }
 
-    private void updateChildApps(List<String> names) {
+    private void updateChildApps(List<ParentAppEntry> apps) {
         drawerApps.clear();
-        drawerApps.addAll(names);
+        drawerApps.addAll(apps);
         filterDrawerApps(drawerSearch == null ? "" : drawerSearch.getText().toString());
     }
 
-    private void updateVaultedApps(List<String> names) {
+    private void updateVaultedApps(List<ParentVaultEntry> apps) {
         vaultAllApps.clear();
-        vaultAllApps.addAll(names);
+        vaultAllApps.addAll(apps);
+        vaultedPackages.clear();
+        for (ParentVaultEntry entry : vaultAllApps) {
+            vaultedPackages.add(entry.packageName);
+        }
         filterVaultApps(vaultSearch == null ? "" : vaultSearch.getText().toString());
         updateVaultVisibility();
+        filterDrawerApps(drawerSearch == null ? "" : drawerSearch.getText().toString());
+        updateUpdateButtonState();
     }
 
     private void startChildSync() {
@@ -444,17 +541,20 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         }
         profileStore.getLinkedChildUid(user).addOnSuccessListener(childUid -> {
             if (childUid == null || childUid.trim().isEmpty()) {
+                linkedChildUid = null;
                 updateVaultVisibility();
+                updateUpdateButtonState();
                 return;
             }
-            attachMetricsListener(childUid.trim());
-            attachChildAppsListener(childUid.trim());
-            attachVaultListener(childUid.trim());
-            requestChildSync(childUid.trim(), false);
+            linkedChildUid = childUid.trim();
+            attachMetricsListener(linkedChildUid);
+            attachChildAppsListener(linkedChildUid);
+            attachVaultListener(linkedChildUid);
+            requestChildSync(linkedChildUid, false, false, null);
         });
     }
 
-    private void requestChildSyncFromUi() {
+    private void requestChildSyncFromUi(SyncAction action, boolean clearPendingOnSuccess) {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
             return;
@@ -463,16 +563,17 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
             if (childUid == null || childUid.trim().isEmpty()) {
                 return;
             }
-            requestChildSync(childUid.trim(), true);
+            requestChildSync(childUid.trim(), true, clearPendingOnSuccess, action);
         });
     }
 
-    private void requestChildSync(String childUid, boolean userInitiated) {
-        if (!canRequestSync()) {
+    private void requestChildSync(String childUid, boolean userInitiated, boolean clearPendingOnSuccess,
+            SyncAction action) {
+        if (userInitiated && action != null && !canRequestSync(action)) {
             if (userInitiated) {
-                long remainingMs = getSyncCooldownRemainingMs();
-                long remainingMin = Math.max(1L, remainingMs / 60_000L);
-                Toast.makeText(this, "Sync cooldown: " + remainingMin + " min", Toast.LENGTH_SHORT).show();
+                long remainingMs = getSyncCooldownRemainingMs(action);
+                long remainingSec = Math.max(1L, remainingMs / 1000L);
+                Toast.makeText(this, "Sync cooldown: " + remainingSec + " s", Toast.LENGTH_SHORT).show();
             }
             return;
         }
@@ -491,29 +592,41 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
                 .document(childUid)
                 .set(data)
                 .addOnSuccessListener(aVoid -> {
-                    markSyncRequested();
+                    if (userInitiated && action != null) {
+                        markSyncRequested(action);
+                    }
+                    if (clearPendingOnSuccess) {
+                        setPendingChanges(false);
+                    }
                     if (userInitiated) {
                         Toast.makeText(this, "Sync requested", Toast.LENGTH_SHORT).show();
                     }
                 });
     }
 
-    private boolean canRequestSync() {
+    private String keyForAction(SyncAction action) {
+        return action == SyncAction.UPDATE
+                ? KEY_LAST_UPDATE_SYNC_REQUEST_AT
+                : KEY_LAST_RELOAD_SYNC_REQUEST_AT;
+    }
+
+    private boolean canRequestSync(SyncAction action) {
         SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
-        long last = prefs.getLong(KEY_LAST_SYNC_REQUEST_AT, 0L);
+        long last = prefs.getLong(keyForAction(action), 0L);
         return System.currentTimeMillis() - last >= SYNC_COOLDOWN_MS;
     }
 
-    private long getSyncCooldownRemainingMs() {
+    private long getSyncCooldownRemainingMs(SyncAction action) {
         SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
-        long last = prefs.getLong(KEY_LAST_SYNC_REQUEST_AT, 0L);
+        long last = prefs.getLong(keyForAction(action), 0L);
         long elapsed = System.currentTimeMillis() - last;
         return Math.max(0L, SYNC_COOLDOWN_MS - elapsed);
     }
 
-    private void markSyncRequested() {
+    private void markSyncRequested(SyncAction action) {
         SharedPreferences prefs = getSharedPreferences(PREFS_SYNC, MODE_PRIVATE);
-        prefs.edit().putLong(KEY_LAST_SYNC_REQUEST_AT, System.currentTimeMillis()).apply();
+        prefs.edit().putLong(keyForAction(action), System.currentTimeMillis()).apply();
+        updateUpdateButtonState();
     }
 
     private void attachMetricsListener(String childUid) {
@@ -531,19 +644,30 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
     }
 
     private void applyMetricsSnapshot(DocumentSnapshot snapshot) {
-        TextView screenTime = findViewById(R.id.tvScreenTime);
+        TextView screenTime = homeScreenTime != null ? homeScreenTime : findViewById(R.id.tvScreenTime);
         TextView unlocks = findViewById(R.id.tvUnlockCount);
         TextView friction = findViewById(R.id.tvFrictionCount);
         TextView vaulted = findViewById(R.id.tvVaultedCount);
-        BarChartView chart = findViewById(R.id.barChart);
+        BarChartView chart = homeChart != null ? homeChart : findViewById(R.id.barChart);
 
         Long screenMinutes = snapshot.getLong("screenTimeMinutes");
         Long unlockCount = snapshot.getLong("unlockCount");
         Long frictionCount = snapshot.getLong("frictionCount");
         Long vaultedCount = snapshot.getLong("vaultedCount");
+        @SuppressWarnings("unchecked")
+        List<Long> daily = (List<Long>) snapshot.get("dailyUsageMinutes");
 
-        if (screenTime != null && screenMinutes != null) {
-            screenTime.setText(formatMinutes(screenMinutes));
+        if (screenMinutes != null) {
+            latestScreenTimeMinutes = screenMinutes;
+        }
+        if (daily != null && !daily.isEmpty()) {
+            latestDailyUsageMinutes = toLongArray(daily);
+            if (chart != null) {
+                chart.setSamples(normalize(daily));
+                if (selectedHomeBarIndex < 0 || selectedHomeBarIndex >= latestDailyUsageMinutes.length) {
+                    chart.setHighlightedBar(getTodayHomeBarIndex());
+                }
+            }
         }
         if (unlocks != null && unlockCount != null) {
             unlocks.setText(String.valueOf(unlockCount));
@@ -555,13 +679,37 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
             vaulted.setText(String.valueOf(vaultedCount));
         }
 
-        if (chart != null) {
-            @SuppressWarnings("unchecked")
-            List<Long> daily = (List<Long>) snapshot.get("dailyUsageMinutes");
-            if (daily != null && !daily.isEmpty()) {
-                chart.setSamples(normalize(daily));
-            }
+        renderHomeScreenTime();
+    }
+
+    private void renderHomeScreenTime() {
+        if (homeScreenTime == null) {
+            return;
         }
+        if (selectedHomeBarIndex >= 0 && selectedHomeBarIndex < latestDailyUsageMinutes.length) {
+            homeScreenTime.setText(formatMinutes(latestDailyUsageMinutes[selectedHomeBarIndex]));
+            if (homeChart != null) {
+                homeChart.setHighlightedBar(selectedHomeBarIndex);
+            }
+            return;
+        }
+        homeScreenTime.setText(formatMinutes(latestScreenTimeMinutes));
+        if (homeChart != null) {
+            homeChart.setHighlightedBar(getTodayHomeBarIndex());
+        }
+    }
+
+    private int getTodayHomeBarIndex() {
+        return latestDailyUsageMinutes.length == 0 ? -1 : latestDailyUsageMinutes.length - 1;
+    }
+
+    private long[] toLongArray(List<Long> values) {
+        long[] out = new long[values.size()];
+        for (int i = 0; i < values.size(); i++) {
+            Long value = values.get(i);
+            out[i] = value == null ? 0L : value;
+        }
+        return out;
     }
 
     private void attachChildAppsListener(String childUid) {
@@ -575,16 +723,20 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
                     if (error != null || snapshot == null) {
                         return;
                     }
-                    List<String> names = new ArrayList<>();
+                    List<ParentAppEntry> apps = new ArrayList<>();
                     for (DocumentSnapshot doc : snapshot.getDocuments()) {
                         String name = doc.getString("name");
                         if (name == null || name.trim().isEmpty()) {
                             name = doc.getId();
                         }
-                        names.add(name);
+                        String pkg = doc.getString("packageName");
+                        if (pkg == null || pkg.trim().isEmpty()) {
+                            pkg = doc.getId();
+                        }
+                        apps.add(new ParentAppEntry(name, pkg));
                     }
-                    Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
-                    updateChildApps(names);
+                    Collections.sort(apps, (a, b) -> a.name.compareToIgnoreCase(b.name));
+                    updateChildApps(apps);
                 });
     }
 
@@ -599,16 +751,27 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
                     if (error != null || snapshot == null) {
                         return;
                     }
-                    List<String> names = new ArrayList<>();
+                    List<ParentVaultEntry> apps = new ArrayList<>();
                     for (DocumentSnapshot doc : snapshot.getDocuments()) {
                         String name = doc.getString("name");
                         if (name == null || name.trim().isEmpty()) {
                             name = doc.getId();
                         }
-                        names.add(name);
+                        String pkg = doc.getString("packageName");
+                        if (pkg == null || pkg.trim().isEmpty()) {
+                            pkg = doc.getId();
+                        }
+                        int friction = doc.getLong("friction") == null
+                                ? VaultPrefs.FRICTION_PLUS_ONE
+                                : doc.getLong("friction").intValue();
+                        int limitMinutes = doc.getLong("dailyLimitMinutes") == null
+                                ? 0
+                                : doc.getLong("dailyLimitMinutes").intValue();
+                        String limitChangedAt = doc.getString("limitChangedAt");
+                        apps.add(new ParentVaultEntry(name, pkg, friction, limitMinutes, limitChangedAt));
                     }
-                    Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
-                    updateVaultedApps(names);
+                    Collections.sort(apps, (a, b) -> a.name.compareToIgnoreCase(b.name));
+                    updateVaultedApps(apps);
                 });
     }
 
@@ -621,13 +784,229 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
             vaultAdapter.setItems(vaultAllApps);
             return;
         }
-        List<String> filtered = new ArrayList<>();
-        for (String name : vaultAllApps) {
-            if (name.toLowerCase(Locale.getDefault()).contains(q)) {
-                filtered.add(name);
+        List<ParentVaultEntry> filtered = new ArrayList<>();
+        for (ParentVaultEntry app : vaultAllApps) {
+            if (app.name.toLowerCase(Locale.getDefault()).contains(q)) {
+                filtered.add(app);
             }
         }
         vaultAdapter.setItems(filtered);
+    }
+
+    private void showAddToVaultMenu(ParentAppEntry app) {
+        if (linkedChildUid == null || linkedChildUid.trim().isEmpty()) {
+            return;
+        }
+        View menuView = getLayoutInflater().inflate(R.layout.dialog_app_context_menu, null);
+        TextView title = menuView.findViewById(R.id.tvMenuTitle);
+        TextView action = menuView.findViewById(R.id.tvVaultAction);
+        if (title != null) {
+            title.setText(app.name);
+        }
+        if (action != null) {
+            action.setText("Add to Vault");
+        }
+        menuView.findViewById(R.id.divVaultTop).setVisibility(View.VISIBLE);
+        menuView.findViewById(R.id.divLimitTop).setVisibility(View.GONE);
+        menuView.findViewById(R.id.btnAppLimit).setVisibility(View.GONE);
+        menuView.findViewById(R.id.divFrictionTop).setVisibility(View.GONE);
+        menuView.findViewById(R.id.btnChangeFriction).setVisibility(View.GONE);
+        menuView.findViewById(R.id.divAppInfoTop).setVisibility(View.GONE);
+        menuView.findViewById(R.id.btnAppInfo).setVisibility(View.GONE);
+
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(menuView)
+                .create();
+
+        menuView.findViewById(R.id.btnToggleVault).setOnClickListener(v -> {
+            addToVault(app);
+            dialog.dismiss();
+        });
+
+        dialog.show();
+    }
+
+    private void showVaultOptions(ParentVaultEntry app) {
+        View menuView = getLayoutInflater().inflate(R.layout.dialog_app_context_menu, null);
+        TextView title = menuView.findViewById(R.id.tvMenuTitle);
+        TextView action = menuView.findViewById(R.id.tvVaultAction);
+        if (title != null) {
+            title.setText(app.name);
+        }
+        if (action != null) {
+            action.setText("Remove from Vault");
+        }
+        menuView.findViewById(R.id.divVaultTop).setVisibility(View.VISIBLE);
+        menuView.findViewById(R.id.divLimitTop).setVisibility(View.VISIBLE);
+        menuView.findViewById(R.id.btnAppLimit).setVisibility(View.VISIBLE);
+        menuView.findViewById(R.id.divFrictionTop).setVisibility(View.VISIBLE);
+        menuView.findViewById(R.id.btnChangeFriction).setVisibility(View.VISIBLE);
+        menuView.findViewById(R.id.divAppInfoTop).setVisibility(View.GONE);
+        menuView.findViewById(R.id.btnAppInfo).setVisibility(View.GONE);
+
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(menuView)
+                .create();
+
+        menuView.findViewById(R.id.btnToggleVault).setOnClickListener(v -> {
+            removeFromVault(app);
+            dialog.dismiss();
+        });
+        menuView.findViewById(R.id.btnChangeFriction).setOnClickListener(v -> {
+            dialog.dismiss();
+            showFrictionPicker(app);
+        });
+        menuView.findViewById(R.id.btnAppLimit).setOnClickListener(v -> {
+            dialog.dismiss();
+            showLimitPicker(app);
+        });
+
+        dialog.show();
+    }
+
+    private void addToVault(ParentAppEntry app) {
+        if (linkedChildUid == null || linkedChildUid.trim().isEmpty()) {
+            return;
+        }
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", app.name);
+        data.put("packageName", app.packageName);
+        data.put("friction", VaultPrefs.FRICTION_PLUS_ONE);
+        data.put("dailyLimitMinutes", 0);
+        data.put("updatedAt", FieldValue.serverTimestamp());
+
+        firestore.collection("child_vault")
+                .document(linkedChildUid)
+                .collection("apps")
+                .document(app.packageName)
+                .set(data)
+                .addOnSuccessListener(aVoid -> setPendingChanges(true));
+    }
+
+    private void removeFromVault(ParentVaultEntry app) {
+        if (linkedChildUid == null || linkedChildUid.trim().isEmpty()) {
+            return;
+        }
+        firestore.collection("child_vault")
+                .document(linkedChildUid)
+                .collection("apps")
+                .document(app.packageName)
+                .delete()
+                .addOnSuccessListener(aVoid -> setPendingChanges(true));
+    }
+
+    private void showFrictionPicker(ParentVaultEntry app) {
+        View view = getLayoutInflater().inflate(R.layout.dialog_friction_picker, null);
+        android.widget.RadioGroup rg = view.findViewById(R.id.rgFriction);
+        int currentType = app.friction;
+        if (currentType == VaultPrefs.FRICTION_PLUS_ONE) {
+            rg.check(R.id.rbPlusOne);
+        } else if (currentType == VaultPrefs.FRICTION_X2) {
+            rg.check(R.id.rb2x);
+        } else if (currentType == VaultPrefs.FRICTION_X3) {
+            rg.check(R.id.rb3x);
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
+
+        android.widget.Button btnCancel = view.findViewById(R.id.btnCancel);
+        android.widget.Button btnOkay = view.findViewById(R.id.btnOkay);
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+        if (btnOkay != null) {
+            btnOkay.setOnClickListener(v -> {
+                int type = VaultPrefs.FRICTION_PLUS_ONE;
+                int checkedId = rg.getCheckedRadioButtonId();
+                if (checkedId == R.id.rb2x) {
+                    type = VaultPrefs.FRICTION_X2;
+                } else if (checkedId == R.id.rb3x) {
+                    type = VaultPrefs.FRICTION_X3;
+                }
+                updateVaultFriction(app, type);
+                dialog.dismiss();
+            });
+        }
+
+        dialog.show();
+    }
+
+    private void updateVaultFriction(ParentVaultEntry app, int type) {
+        if (linkedChildUid == null || linkedChildUid.trim().isEmpty()) {
+            return;
+        }
+        firestore.collection("child_vault")
+                .document(linkedChildUid)
+                .collection("apps")
+                .document(app.packageName)
+                .update("friction", type, "updatedAt", FieldValue.serverTimestamp())
+                .addOnSuccessListener(aVoid -> setPendingChanges(true));
+    }
+
+    private void showLimitPicker(ParentVaultEntry app) {
+        if (!canChangeLimitToday(app)) {
+            showStyledWarningDialog("Limit already set",
+                    "App limit can only be changed once a day. Please try again tomorrow.");
+            return;
+        }
+
+        View view = getLayoutInflater().inflate(R.layout.dialog_limit_picker, null);
+        android.widget.TimePicker tp = view.findViewById(R.id.timePicker);
+        tp.setIs24HourView(true);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            tp.setHour(0);
+            tp.setMinute(0);
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
+
+        android.widget.Button btnCancel = view.findViewById(R.id.btnCancel);
+        android.widget.Button btnOkay = view.findViewById(R.id.btnOkay);
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+        if (btnOkay != null) {
+            btnOkay.setOnClickListener(v -> {
+                int h = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M
+                        ? tp.getHour()
+                        : tp.getCurrentHour();
+                int m = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M
+                        ? tp.getMinute()
+                        : tp.getCurrentMinute();
+                updateVaultLimit(app, h * 60 + m);
+                dialog.dismiss();
+            });
+        }
+
+        dialog.show();
+    }
+
+    private boolean canChangeLimitToday(ParentVaultEntry app) {
+        if (app.limitChangedAt == null || app.limitChangedAt.trim().isEmpty()) {
+            return true;
+        }
+        return !LocalDate.now().toString().equals(app.limitChangedAt);
+    }
+
+    private void updateVaultLimit(ParentVaultEntry app, int minutes) {
+        if (linkedChildUid == null || linkedChildUid.trim().isEmpty()) {
+            return;
+        }
+        String today = LocalDate.now().toString();
+        firestore.collection("child_vault")
+                .document(linkedChildUid)
+                .collection("apps")
+                .document(app.packageName)
+                .update("dailyLimitMinutes", minutes,
+                        "limitChangedAt", today,
+                        "updatedAt", FieldValue.serverTimestamp())
+                .addOnSuccessListener(aVoid -> setPendingChanges(true));
     }
 
     private void unlinkAndReturnToLogin() {
@@ -638,6 +1017,7 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
             return;
         }
         profileStore.unlinkLinkedChild(user).addOnCompleteListener(task -> {
+            profileStore.clearSession(user.getUid());
             FirebaseAuth.getInstance().signOut();
             SessionPrefs.setParentLinkingComplete(this, false);
             Intent intent = new Intent(this, LoginActivity.class);
@@ -645,6 +1025,34 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
             startActivity(intent);
             finish();
         });
+    }
+
+    private void showStyledWarningDialog(String title, String message) {
+        View view = getLayoutInflater().inflate(R.layout.dialog_logout, null);
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
+
+        TextView tvTitle = view.findViewById(R.id.tvDialogTitle);
+        TextView tvMessage = view.findViewById(R.id.tvDialogMessage);
+        android.widget.Button btnCancel = view.findViewById(R.id.btnCancel);
+        android.widget.Button btnAccept = view.findViewById(R.id.btnAccept);
+
+        if (tvTitle != null) {
+            tvTitle.setText(title);
+        }
+        if (tvMessage != null) {
+            tvMessage.setText(message);
+        }
+        if (btnCancel != null) {
+            btnCancel.setVisibility(View.GONE);
+        }
+        if (btnAccept != null) {
+            btnAccept.setText("OK");
+            btnAccept.setOnClickListener(v -> dialog.dismiss());
+        }
+
+        dialog.show();
     }
 
     private void showThemePicker() {
@@ -676,22 +1084,54 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         });
     }
 
+    private void showRemoveLinkDialog() {
+        View view = getLayoutInflater().inflate(R.layout.dialog_logout, null);
+        AlertDialog dialog = new AlertDialog.Builder(this, R.style.DarkDialog)
+                .setView(view)
+                .create();
+
+        TextView tvTitle = view.findViewById(R.id.tvDialogTitle);
+        TextView tvMessage = view.findViewById(R.id.tvDialogMessage);
+        android.widget.Button btnCancel = view.findViewById(R.id.btnCancel);
+        android.widget.Button btnAccept = view.findViewById(R.id.btnAccept);
+
+        if (tvTitle != null) {
+            tvTitle.setText("Remove link");
+        }
+        if (tvMessage != null) {
+            tvMessage.setText("Are You Sure?");
+        }
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+        if (btnAccept != null) {
+            btnAccept.setOnClickListener(v -> {
+                dialog.dismiss();
+                unlinkAndReturnToLogin();
+            });
+        }
+
+        dialog.show();
+    }
+
     private interface SelectionHandler {
         void onSelect(String value);
     }
 
     private void showSingleChoiceDialog(String title, String[] labels, String[] values, String current,
-                                        SelectionHandler handler) {
+            SelectionHandler handler) {
         View view = getLayoutInflater().inflate(R.layout.dialog_single_choice, null);
         TextView titleView = view.findViewById(R.id.tvDialogTitle);
         android.widget.RadioGroup group = view.findViewById(R.id.rgDialogOptions);
         titleView.setText(title);
 
-        android.content.res.ColorStateList radioColors = androidx.core.content.ContextCompat.getColorStateList(this, R.color.dialog_radio_color);
+        android.content.res.ColorStateList radioColors = androidx.core.content.ContextCompat.getColorStateList(this,
+                R.color.dialog_radio_color);
         int checkedId = View.NO_ID;
 
         for (int i = 0; i < labels.length; i++) {
-            androidx.appcompat.widget.AppCompatRadioButton rb = new androidx.appcompat.widget.AppCompatRadioButton(this);
+            androidx.appcompat.widget.AppCompatRadioButton rb = new androidx.appcompat.widget.AppCompatRadioButton(
+                    this);
             rb.setId(View.generateViewId());
             rb.setText(labels[i]);
             rb.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f);
@@ -769,14 +1209,22 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
                 .setView(view)
                 .create();
 
+        TextView msg = view.findViewById(R.id.tvDialogMessage);
         android.widget.Button btnCancel = view.findViewById(R.id.btnCancel);
         android.widget.Button btnAccept = view.findViewById(R.id.btnAccept);
 
+        if (msg != null) {
+            msg.setText("Are You Sure?");
+        }
         if (btnCancel != null) {
             btnCancel.setOnClickListener(v -> dialog.dismiss());
         }
         if (btnAccept != null) {
             btnAccept.setOnClickListener(v -> {
+                FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+                if (user != null) {
+                    profileStore.clearSession(user.getUid());
+                }
                 FirebaseAuth.getInstance().signOut();
                 SessionPrefs.setParentLinkingComplete(this, false);
                 Intent roleSelection = new Intent(this, OnboardingActivity.class);
@@ -817,11 +1265,44 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
         return h == 0 ? m + "m" : h + "h " + m + "m";
     }
 
+    private static class ParentAppEntry {
+        final String name;
+        final String packageName;
+
+        ParentAppEntry(String name, String packageName) {
+            this.name = name;
+            this.packageName = packageName;
+        }
+    }
+
+    private static class ParentVaultEntry extends ParentAppEntry {
+        final int friction;
+        final int dailyLimitMinutes;
+        final String limitChangedAt;
+
+        ParentVaultEntry(String name, String packageName, int friction,
+                int dailyLimitMinutes, String limitChangedAt) {
+            super(name, packageName);
+            this.friction = friction;
+            this.dailyLimitMinutes = dailyLimitMinutes;
+            this.limitChangedAt = limitChangedAt;
+        }
+    }
+
+    private interface OnItemLongClickListener {
+        void onItemLongClick(ParentAppEntry app);
+    }
+
     private class ParentAppTextAdapter extends RecyclerView.Adapter<ParentAppTextAdapter.VH> {
 
-        private final List<String> items = new ArrayList<>();
+        private final List<ParentAppEntry> items = new ArrayList<>();
+        private OnItemLongClickListener longClickListener;
 
-        void setItems(List<String> data) {
+        void setOnItemLongClickListener(OnItemLongClickListener listener) {
+            longClickListener = listener;
+        }
+
+        void setItems(List<? extends ParentAppEntry> data) {
             items.clear();
             if (data != null) {
                 items.addAll(data);
@@ -837,7 +1318,15 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
 
         @Override
         public void onBindViewHolder(VH holder, int position) {
-            holder.name.setText(items.get(position));
+            ParentAppEntry app = items.get(position);
+            holder.name.setText(app.name);
+            holder.itemView.setOnLongClickListener(v -> {
+                if (longClickListener != null) {
+                    longClickListener.onItemLongClick(app);
+                    return true;
+                }
+                return false;
+            });
         }
 
         @Override

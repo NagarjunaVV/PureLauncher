@@ -46,8 +46,7 @@ public class ParentFeatureTourActivity extends AppCompatActivity {
                     basePaddingLeft + systemBars.left,
                     basePaddingTop + systemBars.top,
                     basePaddingRight + systemBars.right,
-                    basePaddingBottom + systemBars.bottom
-            );
+                    basePaddingBottom + systemBars.bottom);
             return insets;
         });
 
@@ -59,25 +58,20 @@ public class ParentFeatureTourActivity extends AppCompatActivity {
         List<FeaturePage> pages = Arrays.asList(
                 new FeaturePage(
                         R.drawable.ic_chart_bar,
-                        "Monitor usage and notifications",
-                        "Track screen time, app open counts, and notification volume to spot patterns early."
-                ),
+                        "Monitor usage patterns",
+                        "Track screen time and app open counts to spot patterns early."),
                 new FeaturePage(
                         R.drawable.ic_family,
                         "Remote controls from one place",
-                        "Lock or unlock selected apps and grant extra time without touching your child\'s phone."
-                ),
+                        "Lock or unlock selected apps without touching your child\'s phone."),
                 new FeaturePage(
                         R.drawable.ic_lock,
                         "Lock apps after time limits",
-                        "Set daily app limits so PureLauncher automatically blocks apps when time is exhausted."
-                ),
+                        "Set daily app limits so PureLauncher automatically blocks apps when time is exhausted."),
                 new FeaturePage(
                         R.drawable.ic_info_circle,
                         "Set up friction logic",
-                        "Use intentional friction to slow impulsive opens and reinforce healthier digital habits."
-                )
-        );
+                        "Use intentional friction to slow impulsive opens and reinforce healthier digital habits."));
 
         viewPager.setAdapter(new ParentFeatureAdapter(pages));
         viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
