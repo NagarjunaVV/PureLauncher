@@ -60,7 +60,7 @@ public class ChildQrActivity extends AppCompatActivity {
                         String pairingPayload = QrCodeUtils.buildPairingPayload(uid, dynamicToken);
                         if (statusView != null) {
                             statusView.setText("Ready to scan");
-                        }
+                        } // Exception Handling With Firestore
                         try {
                             qrPreview.setImageBitmap(QrCodeUtils.generateQrBitmap(pairingPayload, 600));
                         } catch (WriterException e) {
