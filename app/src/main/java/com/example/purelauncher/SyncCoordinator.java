@@ -35,14 +35,17 @@ public class SyncCoordinator {
     private static final String KEY_LAST_SYNC_REQUEST_ID = "last_sync_request_id";
     public static final String ACTION_SYNC_START = "com.example.purelauncher.SYNC_START";
     public static final String ACTION_SYNC_COMPLETE = "com.example.purelauncher.SYNC_COMPLETE";
+    public static final String EXTRA_SYNC_REQUEST_ID = "syncRequestId";
 
     public static void syncToFirestore(Context context, String requestId) {
         Intent startIntent = new Intent(ACTION_SYNC_START);
         startIntent.setPackage(context.getPackageName());
+        startIntent.putExtra(EXTRA_SYNC_REQUEST_ID, requestId);
         context.sendBroadcast(startIntent);
         new Thread(() -> {
             FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
             if (user == null) {
+                sendSyncComplete(context, requestId);
                 return;
             }
             
@@ -53,9 +56,6 @@ public class SyncCoordinator {
                 
                 if (isParentManaged) {
                     applyParentVaultFromFirestore(context, user.getUid());
-                    Intent completeIntent = new Intent(ACTION_SYNC_COMPLETE);
-                    completeIntent.setPackage(context.getPackageName());
-                    context.sendBroadcast(completeIntent);
                 }
             } catch (Exception e) {
                 // Ignore
@@ -139,7 +139,10 @@ public class SyncCoordinator {
             ack.put("lastSyncedRequestId", requestId);
             batch.set(requestRef, ack, SetOptions.merge());
 
-            batch.commit().addOnSuccessListener(aVoid -> saveLastSyncRequestId(context, requestId));
+            batch.commit().addOnSuccessListener(aVoid -> {
+                saveLastSyncRequestId(context, requestId);
+                sendSyncComplete(context, requestId);
+            }).addOnFailureListener(e -> sendSyncComplete(context, requestId));
         }).start();
     }
 
@@ -202,9 +205,16 @@ public class SyncCoordinator {
         return prefs.getString(KEY_LAST_SYNC_REQUEST_ID, "");
     }
 
-    private static void saveLastSyncRequestId(Context context, String requestId) {
+    static void saveLastSyncRequestId(Context context, String requestId) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_SYNC, Context.MODE_PRIVATE);
         prefs.edit().putString(KEY_LAST_SYNC_REQUEST_ID, requestId).apply();
+    }
+
+    private static void sendSyncComplete(Context context, String requestId) {
+        Intent completeIntent = new Intent(ACTION_SYNC_COMPLETE);
+        completeIntent.setPackage(context.getPackageName());
+        completeIntent.putExtra(EXTRA_SYNC_REQUEST_ID, requestId);
+        context.sendBroadcast(completeIntent);
     }
 
     public static boolean isOnline(Context context) {

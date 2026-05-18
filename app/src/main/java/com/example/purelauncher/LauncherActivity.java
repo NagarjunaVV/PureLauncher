@@ -132,6 +132,9 @@ public class LauncherActivity extends AppCompatActivity {
     private int vaultLastSelectedIndex = -1;
     private boolean isVaultSearchActive = false;
     private android.widget.ProgressBar vaultLoadingBar;
+    private String visibleVaultSyncRequestId = "";
+    private String completedVaultSyncRequestId = "";
+    private final Handler vaultSyncUiHandler = new Handler(Looper.getMainLooper());
 
     private int navIconPadding = 0;
     private boolean isParentManaged = false;
@@ -139,21 +142,11 @@ public class LauncherActivity extends AppCompatActivity {
         @Override
         public void onReceive(android.content.Context context, android.content.Intent intent) {
             if (SyncCoordinator.ACTION_SYNC_START.equals(intent.getAction())) {
-                if (vaultLoadingBar != null) {
-                    vaultLoadingBar.setVisibility(View.VISIBLE);
-                }
+                String requestId = intent.getStringExtra(SyncCoordinator.EXTRA_SYNC_REQUEST_ID);
+                showVaultSyncLoading(requestId);
             } else if (SyncCoordinator.ACTION_SYNC_COMPLETE.equals(intent.getAction())) {
-                new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    if (vaultLoadingBar != null) {
-                        vaultLoadingBar.setVisibility(View.GONE);
-                    }
-                    Intent restartIntent = new Intent(LauncherActivity.this, LauncherActivity.class);
-                    restartIntent.putExtra("openVault", currentPage == PAGE_VAULT);
-                    restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    startActivity(restartIntent);
-                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
-                    finish();
-                }, 3000);
+                String requestId = intent.getStringExtra(SyncCoordinator.EXTRA_SYNC_REQUEST_ID);
+                completeVaultSyncLoading(requestId);
             }
         }
     };
@@ -836,6 +829,58 @@ public class LauncherActivity extends AppCompatActivity {
         }
 
         refreshVaultPage();
+    }
+
+    private void showVaultSyncLoading(String requestId) {
+        if (requestId == null || requestId.trim().isEmpty()) {
+            return;
+        }
+        if (requestId.equals(completedVaultSyncRequestId) || requestId.equals(visibleVaultSyncRequestId)) {
+            return;
+        }
+        visibleVaultSyncRequestId = requestId;
+        vaultSyncUiHandler.removeCallbacksAndMessages(null);
+        if (vaultLoadingBar == null) {
+            return;
+        }
+        vaultLoadingBar.animate().cancel();
+        vaultLoadingBar.setAlpha(0f);
+        vaultLoadingBar.setVisibility(View.VISIBLE);
+        vaultLoadingBar.animate()
+                .alpha(1f)
+                .setDuration(180L)
+                .start();
+    }
+
+    private void completeVaultSyncLoading(String requestId) {
+        if (requestId == null || requestId.trim().isEmpty()) {
+            return;
+        }
+        if (requestId.equals(completedVaultSyncRequestId)) {
+            return;
+        }
+        completedVaultSyncRequestId = requestId;
+        refreshVaultPage();
+        if (!requestId.equals(visibleVaultSyncRequestId)) {
+            return;
+        }
+        vaultSyncUiHandler.postDelayed(() -> {
+            if (vaultLoadingBar == null || !requestId.equals(visibleVaultSyncRequestId)) {
+                return;
+            }
+            vaultLoadingBar.animate().cancel();
+            vaultLoadingBar.animate()
+                    .alpha(0f)
+                    .setDuration(260L)
+                    .withEndAction(() -> {
+                        if (vaultLoadingBar != null && requestId.equals(visibleVaultSyncRequestId)) {
+                            vaultLoadingBar.setVisibility(View.GONE);
+                            vaultLoadingBar.setAlpha(1f);
+                            visibleVaultSyncRequestId = "";
+                        }
+                    })
+                    .start();
+        }, 450L);
     }
 
     private void refreshVaultPage() {

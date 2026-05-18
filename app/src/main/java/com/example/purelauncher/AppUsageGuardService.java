@@ -86,6 +86,11 @@ public class AppUsageGuardService extends Service {
                     if (requestId == null || requestId.trim().isEmpty()) {
                         return;
                     }
+                    String lastSyncedRequestId = snapshot.getString("lastSyncedRequestId");
+                    if (requestId.equals(lastSyncedRequestId)) {
+                        SyncCoordinator.saveLastSyncRequestId(this, requestId);
+                        return;
+                    }
                     if (!SyncCoordinator.isOnline(this)) {
                         return;
                     }
