@@ -1,3 +1,4 @@
+
 package com.example.purelauncher;
 
 import android.app.AlertDialog;
@@ -44,6 +45,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+
+//this is parent dashboard
 
 public class ActivityParentDashboardActivity extends AppCompatActivity {
 
@@ -113,6 +116,7 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+
 
         pageHome = findViewById(R.id.pageHome);
         pageVault = findViewById(R.id.pageVault);
