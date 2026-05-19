@@ -161,7 +161,7 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
         nextButton.setAlpha(granted ? 1f : 0.55f);
         nextButton.setText(currentStepIndex == steps.length - 1 ? "Continue" : "Next");
     }
-
+//open permissions
     private void openPermissionSettings(PermissionStep step) {
         if (step == PermissionStep.OVERLAY) {
             Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -194,6 +194,8 @@ public class PersonalPermissionsActivity extends AppCompatActivity {
         }
         return false;
     }
+
+    //remove permissions
 
     private void askToRemovePermissionBeforeBack(PermissionStep step) {
         android.view.View view = getLayoutInflater().inflate(R.layout.dialog_permission_remove, null);
