@@ -21,6 +21,12 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException;
 import com.google.firebase.auth.FirebaseAuthInvalidUserException;
 
+/**
+ * LoginActivity handles child authentication via Firebase Auth.
+ * After a successful login, it verifies the user's role and session
+ * status in Firestore to ensure the device is correctly linked and
+ * authorized to run the launcher.
+ */
 public class LoginActivity extends AppCompatActivity {
 
     private EditText emailField;

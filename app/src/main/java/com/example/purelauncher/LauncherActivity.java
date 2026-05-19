@@ -68,6 +68,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * LauncherActivity serves as the main entry point for the child experience.
+ * It integrates with Firestore via UserProfileStore to monitor the linked status
+ * with the parent and coordinates with SyncCoordinator to ensure local usage
+ * data is consistently reflected in the cloud.
+ */
 public class LauncherActivity extends AppCompatActivity {
 
     private static final String PREFS_SYNC = "child_sync_prefs";

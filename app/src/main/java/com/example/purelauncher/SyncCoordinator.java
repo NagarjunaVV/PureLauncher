@@ -29,6 +29,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * SyncCoordinator handles the background synchronization of child telemetry and vault settings
+ * between the local device and Firebase Firestore. It ensures that parent-set limits and
+ * friction are applied while reporting usage metrics back to the dashboard.
+ */
 public class SyncCoordinator {
 
     private static final String PREFS_SYNC = "child_sync_prefs";

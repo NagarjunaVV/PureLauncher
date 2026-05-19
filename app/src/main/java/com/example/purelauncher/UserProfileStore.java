@@ -14,6 +14,11 @@ import com.google.firebase.firestore.SetOptions;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * UserProfileStore manages user metadata and relationship mapping in Firestore.
+ * It is responsible for creating user profiles, assigning roles (Parent/Child),
+ * and handling the secure linking/unlinking of parent and child accounts.
+ */
 final class UserProfileStore {
 
     private static final String TAG = "UserProfileStore";
