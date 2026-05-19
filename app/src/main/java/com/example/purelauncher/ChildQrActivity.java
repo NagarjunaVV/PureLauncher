@@ -20,6 +20,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * ChildQrActivity facilitates the secure pairing process by generating a unique 
+ * association token in Firestore. This token is represented as a QR code, 
+ * which the parent scans to establish a linked relationship between the two accounts.
+ */
 public class ChildQrActivity extends AppCompatActivity {
 
     @Override

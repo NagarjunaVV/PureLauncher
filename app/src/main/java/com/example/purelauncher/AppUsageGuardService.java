@@ -26,9 +26,9 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 /**
- * Background service that monitors the currently open app.
- * 1. If the app is in the vault and its limit is reached, it blocks the app.
- * 2. If the app is in the vault and was not unlocked via the friction gate, it shows the gate.
+ * AppUsageGuardService acts as a real-time bridge between Firestore and the child's device.
+ * It listens for remote sync requests from the parent and enforces vault restrictions
+ * such as time limits and friction gates based on the latest cloud data.
  */
 public class AppUsageGuardService extends Service {
 

@@ -25,6 +25,12 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException;
 import com.google.firebase.auth.UserProfileChangeRequest;
 
+/**
+ * SignupActivity handles the registration of new child accounts.
+ * It uses Firebase Authentication for account creation and UserProfileStore
+ * to initialize the child's profile document in Firestore, setting their
+ * role and preparing the account for parent linking.
+ */
 public class SignupActivity extends AppCompatActivity {
 
     private EditText nameField;
