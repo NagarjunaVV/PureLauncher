@@ -46,8 +46,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-//this is parent dashboard
-
 public class ActivityParentDashboardActivity extends AppCompatActivity {
 
     private static final int PAGE_HOME = 0;
@@ -240,7 +238,7 @@ public class ActivityParentDashboardActivity extends AppCompatActivity {
             add.setOnClickListener(v -> openDrawer());
         }
     }
-
+//setting page
     private void setupSettingsPage() {
         updateSettingsSummaries();
 
