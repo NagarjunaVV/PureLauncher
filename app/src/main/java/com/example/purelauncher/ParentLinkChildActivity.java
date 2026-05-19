@@ -60,7 +60,7 @@ public class ParentLinkChildActivity extends AppCompatActivity {
 
         refreshCurrentLinkState();
     }
-
+//link child
     private void linkChild(FirebaseUser user, String childUid) {
         userProfileStore.setLinkedChildUid(user, childUid).addOnCompleteListener(task -> {
             if (task.isSuccessful()) {
