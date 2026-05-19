@@ -80,7 +80,7 @@ public class ParentScreenTimeActivity extends AppCompatActivity {
         adapter = new AppListAdapter(new ArrayList<>());
         rvApps.setAdapter(adapter);
     }
-
+//Binds the action
     private void bindActions() {
         findViewById(R.id.btnClose).setOnClickListener(v -> finish());
 
