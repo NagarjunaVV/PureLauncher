@@ -56,6 +56,8 @@ public class PersonalFeatureTourActivity extends AppCompatActivity {
         nextButton = findViewById(R.id.btnNext);
         counterText = findViewById(R.id.tvPagerCounter);
 
+        //list of child features
+
         List<FeaturePage> pages = Arrays.asList(
                 new FeaturePage(
                         R.drawable.ic_lock,
@@ -78,6 +80,8 @@ public class PersonalFeatureTourActivity extends AppCompatActivity {
                         "Track usage trends and reclaim attention with small daily wins that build long-term habits."
                 )
         );
+
+        //view features
 
         viewPager.setAdapter(new PersonalFeatureAdapter(pages));
         viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
@@ -119,7 +123,7 @@ public class PersonalFeatureTourActivity extends AppCompatActivity {
             renderControls(0, pages.size());
         }
     }
-
+//read
     private void renderControls(int position, int total) {
         counterText.setText((position + 1) + " / " + total);
         backButton.setEnabled(true);
